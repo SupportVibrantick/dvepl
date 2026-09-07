@@ -82,7 +82,7 @@ export function isAdminUser(user: any): boolean {
   const roleValues = Array.isArray(user.roles) ? user.roles : user.role ? [user.role] : [];
   return roleValues.some((r: any) => {
     const roleName = typeof r === "string" ? r : (r?.name ?? r?.label ?? "");
-    return roleName === "Admin";
+    return roleName.toLowerCase().includes("admin");
   });
 }
 

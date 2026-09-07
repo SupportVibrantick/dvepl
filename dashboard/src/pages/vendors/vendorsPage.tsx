@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ColumnDef } from "@tanstack/react-table";
 import {
   Building2,
@@ -271,8 +272,12 @@ export function VendorsPage() {
     fetchAllData();
   }, []);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlRef = searchParams.get("ref");
+  const urlOrderId = searchParams.get("orderId");
+
   // UI States
-  const [globalSearch, setGlobalSearch] = useState("");
+  const [globalSearch, setGlobalSearch] = useState(() => searchParams.get("search") || "");
   const [fieldSearch, setFieldSearch] = useState("");
   const [productOnlySearch, setProductOnlySearch] = useState("");
 
@@ -917,6 +922,36 @@ export function VendorsPage() {
           </Button>
         )}
       </div>
+
+      {/* ── Linked Order / PO Banner ── */}
+      {(urlRef || urlOrderId) && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 shadow-3xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-base">🏭</span>
+            <div className="min-w-0">
+              <p className="text-xs font-medium">
+                Linked for Order / PO:{" "}
+                <span className="font-bold text-foreground">
+                  {urlRef || urlOrderId}
+                </span>
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete("ref");
+              next.delete("orderId");
+              setSearchParams(next);
+            }}
+            className="h-7 text-xs px-2.5 rounded-lg border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 cursor-pointer shrink-0"
+          >
+            Clear Filter
+          </Button>
+        </div>
+      )}
 
       {/* ── Add/Edit Vendor Form Section ── */}
       {isFormOpen && (

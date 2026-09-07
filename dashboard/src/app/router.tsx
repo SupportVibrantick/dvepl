@@ -138,6 +138,8 @@ export function AppRouter() {
             {/* Direct preview routes (accessible without login) */}
             <Route path="/accounts-preview" element={<AccountsPage />} />
             <Route path="/accounts-preview/:id" element={<AccountsPage />} />
+            <Route path="/drawings-preview" element={<ExportOrdersPage />} />
+            <Route path="/drawings-preview/:id" element={<ExportOrdersPage />} />
 
 
             {/* Protected Application Routes */}
@@ -284,6 +286,7 @@ export function AppRouter() {
                 element={<NotificationsPage />}
               />
               <Route path="/export-orders" element={<ExportOrdersPage />} />
+              <Route path="/export-orders/:id" element={<ExportOrdersPage />} />
               <Route path="/orders/:id" element={<OrderDetailPage />} />
               <Route path="/accounts" element={<AccountsPage />} />
               <Route path="/accounts/:id" element={<AccountsPage />} />

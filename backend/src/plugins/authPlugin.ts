@@ -323,7 +323,7 @@ async function authPlugin(fastify: FastifyInstance) {
         }
 
         const roles: string[] = (request.admin as any)?.roles ?? [];
-        const isAdmin = roles.some((r: string) => r === "Admin");
+        const isAdmin = roles.some((r: string) => String(r).toLowerCase().includes("admin"));
         if (isAdmin) return;
 
         // Page/action access profiles are the single source of authorization.

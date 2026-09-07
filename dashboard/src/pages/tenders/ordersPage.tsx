@@ -15,6 +15,7 @@ import {
   Maximize2,
   Minimize2,
   FileSpreadsheet,
+  Layers,
 } from "lucide-react";
 
 import {
@@ -505,14 +506,14 @@ export function OrdersPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  disabled={!isAdmin}
+                  disabled={!isAdmin && !canEdit}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isAdmin) return;
+                    if (!isAdmin && !canEdit) return;
                     setAssigningTender(item);
                   }}
                   className="size-7 rounded-lg hover:bg-primary/10 hover:text-primary transition-all duration-150 ml-auto shrink-0 border border-transparent hover:border-primary/10"
-                  title={isAdmin ? "Assign Users" : "Only administrators can manage assignments"}
+                  title={isAdmin || canEdit ? "Assign Users" : "Only administrators can manage assignments"}
                 >
                   <UserPlus className="size-3.5" />
                 </Button>
@@ -524,21 +525,93 @@ export function OrdersPage() {
         accounts: {
           id: "accounts",
           header: "ACCOUNTS",
-          cell: ({ row }) => (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/accounts/${row.original.id}`);
-              }}
-              className="h-7 px-2.5 text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20 hover:bg-sky-500/20 hover:text-sky-700 rounded-lg gap-1.5 shadow-3xs cursor-pointer"
-              title="Open Costing & Quotation sheet"
-            >
-              <FileSpreadsheet className="size-3 text-sky-600 dark:text-sky-400" />
-              <span>Accounts</span>
-            </Button>
-          ),
+          cell: ({ row }) => {
+            const item = row.original;
+            const assignments = item.assignments || [];
+            const canAccess =
+              isAdmin ||
+              assignments.some(
+                (a) =>
+                  a.userId === currentUserId &&
+                  (!a.stage ||
+                    a.stage === "ACCOUNTS_COSTING" ||
+                    String(a.stage).toUpperCase().includes("ACCOUNT"))
+              );
+
+            return (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canAccess}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canAccess) return;
+                  navigate(`/accounts/${item.id}`);
+                }}
+                className={`h-7 px-2.5 text-[11px] font-bold rounded-lg gap-1.5 shadow-3xs transition-all ${
+                  canAccess
+                    ? "text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20 hover:bg-sky-500/20 hover:text-sky-700 cursor-pointer"
+                    : "opacity-30 cursor-not-allowed border-muted text-muted-foreground bg-muted/10"
+                }`}
+                title={
+                  canAccess
+                    ? "Open Costing & Quotation sheet"
+                    : "Restricted to assigned accounts personnel and administrators"
+                }
+              >
+                <FileSpreadsheet className="size-3 text-sky-600 dark:text-sky-400" />
+                <span>Accounts</span>
+              </Button>
+            );
+          },
+        },
+
+        drawings: {
+          id: "drawings",
+          header: "DRAWINGS",
+          cell: ({ row }) => {
+            const item = row.original;
+            const assignments = item.assignments || [];
+            const canAccess =
+              isAdmin ||
+              assignments.some(
+                (a) =>
+                  a.userId === currentUserId &&
+                  (!a.stage ||
+                    a.stage === "DRAWING_ASSIGNED" ||
+                    a.stage === "DRAWING_SENT" ||
+                    a.stage === "REVISION_REQUIRED" ||
+                    a.stage === "DRAWING_APPROVED" ||
+                    String(a.stage).toUpperCase().includes("DRAWING") ||
+                    String(a.stage).toUpperCase().includes("REVISION"))
+              );
+
+            return (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canAccess}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canAccess) return;
+                  navigate(`/export-orders?orderId=${item.id}`);
+                }}
+                className={`h-7 px-2.5 text-[11px] font-bold rounded-lg gap-1.5 shadow-3xs transition-all ${
+                  canAccess
+                    ? "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/20 hover:text-purple-700 cursor-pointer"
+                    : "opacity-30 cursor-not-allowed border-muted text-muted-foreground bg-muted/10"
+                }`}
+                title={
+                  canAccess
+                    ? "Open Engineering Drawings"
+                    : "Restricted to assigned drawing personnel and administrators"
+                }
+              >
+                <Layers className="size-3 text-purple-600 dark:text-purple-400" />
+                <span>Drawings</span>
+              </Button>
+            );
+          },
         },
 
         contactPerson: {
@@ -734,7 +807,7 @@ export function OrdersPage() {
       return (Object.keys(allDefs) as ColumnKey[])
         .filter((key) => visibleColumns[key])
         .map((key) => allDefs[key]);
-    }, [visibleColumns, isAdmin]);
+    }, [visibleColumns, isAdmin, currentUserId]);
 
   // ============================================================
   // RENDER

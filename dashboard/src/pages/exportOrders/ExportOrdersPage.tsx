@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useExportOrdersStore } from "@/store/exportOrders.store";
 import { useERPStore } from "@/store/erpStore";
 import { canPerformPageAction } from "@/utils/pagePermissions";
-import { Search, RefreshCw, Layers, SlidersHorizontal, Plus } from "lucide-react";
+import { Search, RefreshCw, Layers, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FilterPanel from "./components/FilterPanel";
@@ -61,6 +62,11 @@ export default function ExportOrdersPage() {
   const fetchAvailableOrders = useExportOrdersStore((s) => s.fetchAvailableOrders);
   const fetchDrawings = useExportOrdersStore((s) => s.fetchDrawings);
 
+  const navigate = useNavigate();
+  const { id: paramOrderId } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlOrderId = paramOrderId || searchParams.get("orderId") || null;
+
   // ── Filter state ─────────────────────────────────────────────────────────
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [activeFilters, setActiveFilters] = useState<Partial<Filters>>({});
@@ -68,10 +74,19 @@ export default function ExportOrdersPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // ── Selection & Direct Upload state ──────────────────────────────────────
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>(() =>
+    urlOrderId ? [urlOrderId] : [],
+  );
   const [selectedDrawingIds, setSelectedDrawingIds] = useState<string[]>([]);
   const [directUploadOrderId, setDirectUploadOrderId] = useState<string | null>(null);
   const [openDirectUpload, setOpenDirectUpload] = useState(false);
+
+  // Sync selection when urlOrderId changes
+  useEffect(() => {
+    if (urlOrderId) {
+      setSelectedOrderIds([urlOrderId]);
+    }
+  }, [urlOrderId]);
 
   // ── Fetch data ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -91,13 +106,28 @@ export default function ExportOrdersPage() {
     void fetchAvailableOrders();
   }, [fetchAvailableOrders]);
 
-  const allOrderIds = useMemo(() => orders.map((o) => o.id), [orders]);
+  const allOrderIds = useMemo(() => {
+    const ids = orders.map((o) => o.id);
+    if (urlOrderId && !ids.includes(urlOrderId)) {
+      ids.push(urlOrderId);
+    }
+    return ids;
+  }, [orders, urlOrderId]);
   const allOrderIdsKey = allOrderIds.join(",");
   useEffect(() => {
     void fetchDrawings(allOrderIds);
   }, [allOrderIds, allOrderIdsKey, fetchDrawings]);
 
   // ── Computed ─────────────────────────────────────────────────────────────
+  const targetOrder = useMemo(() => {
+    if (!urlOrderId) return null;
+    return (
+      orders.find((o) => o.id === urlOrderId) ||
+      availableOrders.find((o) => o.id === urlOrderId) ||
+      null
+    );
+  }, [orders, availableOrders, urlOrderId]);
+
   const selectedOrders = orders.filter((o) => selectedOrderIds.includes(o.id));
 
   // Drawings to display: if orders are selected, show only drawings for selected orders, else show all drawings
@@ -245,6 +275,45 @@ export default function ExportOrdersPage() {
         open={filterOpen}
         setOpen={setFilterOpen}
       />
+
+      {/* Active Order Banner */}
+      {urlOrderId && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-900 dark:text-purple-300 shadow-3xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Layers className="size-4.5 shrink-0 text-purple-600 dark:text-purple-400" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium">
+                Showing engineering drawings for Order:{" "}
+                <span className="font-bold text-foreground">
+                  {String(targetOrder?.dveplCode || (targetOrder as any)?.soNo || urlOrderId)}
+                </span>
+                {Boolean(targetOrder?.partyName) && (
+                  <span className="ml-1.5 opacity-80 text-[11px]">
+                    ({String(targetOrder?.partyName)})
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedOrderIds([]);
+              if (paramOrderId) {
+                navigate("/export-orders");
+              } else {
+                const next = new URLSearchParams(searchParams);
+                next.delete("orderId");
+                setSearchParams(next);
+              }
+            }}
+            className="h-7 text-xs px-2.5 rounded-lg border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/15 cursor-pointer shrink-0"
+          >
+            Show All Orders
+          </Button>
+        </div>
+      )}
 
       {/* Section 1: Assigned Orders */}
       <div className="flex flex-col gap-3">
