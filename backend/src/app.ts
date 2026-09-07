@@ -52,7 +52,7 @@ async function buildApp() {
   });
 
   fastify.register(fastifyJwt, {
-    secret: process.env.JWT_SECRET || "SecretKey",
+    secret: process.env.JWT_ACCESS_SECRET || "SecretKey",
   });
 
   // Register plugins

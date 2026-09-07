@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useERPStore } from "@/store/erpStore";
+import { isAdminUser } from "@/utils/pagePermissions";
 import {
   ChevronLeft,
   Pencil,
@@ -14,6 +16,8 @@ import {
   RefreshCw,
   ArrowRight,
   CheckCircle2,
+  ShieldAlert,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
@@ -102,6 +106,27 @@ export function AccountsPage() {
   const [orderList, setOrderList] = useState<Array<{ id: string; dveplCode?: string; partyName?: string; caNo?: string }>>([]);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [rawOrder, setRawOrder] = useState<any>(null);
+
+  const store = useERPStore();
+  const currentUser = useMemo(() => {
+    return store.users.find((user) => user.id === store.currentUserId) as any;
+  }, [store.users, store.currentUserId]);
+  const currentUserId = store.currentUserId || currentUser?.id || null;
+  const isAdmin = isAdminUser(currentUser);
+
+  // Check if current user is authorized for the accounts part of this order
+  const hasAccountsAccess = useMemo(() => {
+    if (isAdmin) return true;
+    if (!rawOrder) return true; // While order is still loading
+    const assignments: any[] = rawOrder.assignments || [];
+    return assignments.some(
+      (a: any) =>
+        a.userId === currentUserId &&
+        (!a.stage ||
+          a.stage === "ACCOUNTS_COSTING" ||
+          String(a.stage).toUpperCase().includes("ACCOUNT"))
+    );
+  }, [isAdmin, rawOrder, currentUserId]);
 
   const currentOrderId = rawOrder?.id || id || "";
   const orderCode = rawOrder?.dveplCode || (id ? (id.startsWith("ORD-") ? id : id.startsWith("SO-") ? id : `ORD-2026-${id.padStart(5, "0")}`) : "ORD-2026-00265");
@@ -222,13 +247,27 @@ export function AccountsPage() {
       try {
         const res = await apiClient.get("/order/read?page=1&limit=100");
         if (res.data?.success && Array.isArray(res.data?.data)) {
-          setOrderList(res.data.data);
+          const allOrders = res.data.data;
+          if (isAdmin) {
+            setOrderList(allOrders);
+          } else {
+            const accessible = allOrders.filter((o: any) =>
+              (o.assignments || []).some(
+                (a: any) =>
+                  a.userId === currentUserId &&
+                  (!a.stage ||
+                    a.stage === "ACCOUNTS_COSTING" ||
+                    String(a.stage).toUpperCase().includes("ACCOUNT"))
+              )
+            );
+            setOrderList(accessible);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch order list for accounts selector:", err);
       }
     })();
-  }, []);
+  }, [isAdmin, currentUserId]);
 
   // Fetch target order details from backend
   const fetchOrderData = useCallback(async (targetId?: string) => {
@@ -558,6 +597,51 @@ export function AccountsPage() {
     lessAdvance,
     specialNote,
   };
+  if (isLoadingOrder) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+          <Loader2 className="size-4 animate-spin text-primary" />
+          Loading Accounts & Costing sheet...
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAccountsAccess && rawOrder) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] p-6 text-center">
+        <div className="size-16 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-4 border border-amber-500/20 shadow-xs">
+          <ShieldAlert className="size-8" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground">Access Restricted</h2>
+        <p className="text-sm text-muted-foreground max-w-md mt-2 leading-relaxed">
+          The Accounts & Costing section for order{" "}
+          <span className="font-semibold text-foreground">
+            {rawOrder.dveplCode || rawOrder.caNo || rawOrder.id}
+          </span>{" "}
+          is restricted. Only assigned accounts personnel and administrators can access this part.
+        </p>
+        <div className="flex items-center gap-3 mt-6">
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/orders/${rawOrder.id}`)}
+            className="rounded-xl gap-2 text-xs font-semibold"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to Order Details
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => navigate("/tender/orders")}
+            className="rounded-xl text-xs font-bold"
+          >
+            All Orders
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-16 font-sans">

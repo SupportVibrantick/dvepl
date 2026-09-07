@@ -16,6 +16,8 @@ import {
   ShoppingCart,
   Trash2,
   FileSpreadsheet,
+  Layers,
+  Users,
 } from "lucide-react";
 import {
   DndContext,
@@ -983,6 +985,24 @@ function OrderDetail({
             title="Open Accounts Costing & Quotation sheet"
           >
             <FileSpreadsheet className="h-3.5 w-3.5" /> Accounts
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/purchase/vendors?orderId=${order.id}&ref=${encodeURIComponent(order.dveplCode || "")}`)}
+            className="gap-1 text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 cursor-pointer shadow-3xs"
+            title="Open Vendors & Purchase Orders"
+          >
+            <Users className="h-3.5 w-3.5" /> Vendors
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/export-orders?orderId=${order.id}`)}
+            className="gap-1 text-purple-600 dark:text-purple-400 border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 cursor-pointer shadow-3xs"
+            title="Open Engineering Drawings & Revisions"
+          >
+            <Layers className="h-3.5 w-3.5" /> Drawings
           </Button>
           <Button variant="outline" size="sm" onClick={onOpenReminder}>
             <Send className="h-3.5 w-3.5" /> Reminder
