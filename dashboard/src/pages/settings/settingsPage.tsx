@@ -1167,8 +1167,10 @@ export function SettingsPage() {
         ...partialSettings,
       };
       await store.updateSettings(payload);
+      return true;
     } catch (e) {
       console.error("Failed to update settings:", e);
+      return false;
     }
   };
 
@@ -1384,15 +1386,19 @@ export function SettingsPage() {
     }
   };
 
-  const saveSmtpSettings = () => {
+  const saveSmtpSettings = async () => {
     const updatedSmtp = {
       ...smtpSettings,
       username: smtpSettings.email,
     };
     localStorage.setItem("dvepl_smtp_settings", JSON.stringify(updatedSmtp));
-    updateStoreSettings({ smtpSettings: updatedSmtp });
-    toast.success("SMTP configuration saved successfully");
-    setIsEditingSmtp(false);
+    const saved = await updateStoreSettings({ smtpSettings: updatedSmtp });
+    if (saved) {
+      toast.success("SMTP configuration saved successfully");
+      setIsEditingSmtp(false);
+    } else {
+      toast.error("Failed to save SMTP configuration. Please try again.");
+    }
   };
 
   const testSmtpConnection = async () => {
