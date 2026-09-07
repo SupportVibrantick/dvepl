@@ -70,12 +70,6 @@ async function readUserAccessRoute(
               ? mainRole.actionPermissions
               : (up?.actionPermissions || { create: true, edit: true, delete: false, export: true }));
 
-        const fieldPermissions = hasOverride
-          ? (up?.fieldPermissions || {})
-          : (mainRole?.fieldPermissions && Object.keys((mainRole.fieldPermissions as any) || {}).length > 0
-              ? mainRole.fieldPermissions
-              : (up?.fieldPermissions || {}));
-
         return reply.send({
           success: true,
           data: {
@@ -92,7 +86,6 @@ async function readUserAccessRoute(
             },
             pageAccess,
             actionPermissions,
-            fieldPermissions,
             hasOverride,
           },
         });

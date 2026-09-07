@@ -30,6 +30,7 @@ const PERMISSION_CODE_MODULE_MAP: Record<string, string> = {
   vendor: 'vendors',
   inventory: 'inventory',
   exportOrder: 'export_orders',
+  workflow: 'workflow_tracker',
   payment: 'finance',
   tenderRequest: 'tender_requests',
   tender: 'tenders',

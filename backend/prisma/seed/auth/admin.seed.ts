@@ -67,7 +67,6 @@ export async function seedAdmin(prisma: any, companyId: string) {
             userId: adminUser.id,
             designation: "Administrator",
             pageAccess: ADMIN_PAGE_ACCESS,
-            fieldPermissions: {},
             actionPermissions: ADMIN_ACTION_PERMISSIONS,
         },
     });

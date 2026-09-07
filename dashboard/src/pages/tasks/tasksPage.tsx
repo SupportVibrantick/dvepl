@@ -299,10 +299,14 @@ export default function TasksPage() {
     setIsSendingReminders(true);
     try {
       const res = await apiService.tasks.sendReminders();
-      toast.success(res.message || "Overdue notifications dispatched.");
+      if (res.success === false) {
+        toast.error(res.message || "Failed to trigger overdue reminders.");
+      } else {
+        toast.success(res.message || "Overdue notifications dispatched.");
+      }
     } catch (err: any) {
       console.error(err);
-      toast.error("Failed to trigger overdue reminders.");
+      toast.error(err.response?.data?.message || "Failed to trigger overdue reminders.");
     } finally {
       setIsSendingReminders(false);
     }

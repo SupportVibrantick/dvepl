@@ -161,13 +161,11 @@ async function updateUserAccessRoute(
                             hasOverride: true,
                             pageAccess,
                             actionPermissions,
-                            fieldPermissions: {},
                         },
                         update: {
                             hasOverride: true,
                             pageAccess,
                             actionPermissions,
-                            fieldPermissions: {},
                         },
                     });
                 });

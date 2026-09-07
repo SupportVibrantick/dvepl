@@ -38,7 +38,7 @@ async function createRoleRoute(
                     });
                 }
 
-                const { name, description, permissionIds, pageAccess, fieldPermissions, actionPermissions } =
+                const { name, description, permissionIds, pageAccess, actionPermissions } =
                     validationResult.data;
 
                 const companyId = (request.admin as any)?.companyId;
@@ -97,7 +97,6 @@ async function createRoleRoute(
                                         name,
                                         description,
                                         pageAccess: pageAccess || [],
-                                        fieldPermissions: fieldPermissions || {},
                                         actionPermissions: actionPermissions || {},
                                     },
                                 });

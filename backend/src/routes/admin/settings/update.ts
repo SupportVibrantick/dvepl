@@ -42,69 +42,85 @@ async function updateSettingsRoute(
 
         const companyId = request.user.companyId;
 
-        // Upsert database notification configuration
-        if (companyId) {
-          const emailEnabled = !!(
-            (validationResult.data.smtpSettings?.host && validationResult.data.smtpSettings?.port) ||
-            (validationResult.data.emailSettings as any)?.orders ||
-            (validationResult.data.emailSettings as any)?.tasks ||
-            (validationResult.data.emailSettings as any)?.payments ||
-            (validationResult.data.emailSettings as any)?.delivery ||
-            validationResult.data.emailSettings?.orderGen ||
-            validationResult.data.emailSettings?.gatePass ||
-            validationResult.data.emailSettings?.paymentRel ||
-            validationResult.data.emailSettings?.clientNotify
-          );
-          const whatsappEnabled = !!(
-            validationResult.data.waSettings?.orderGen ||
-            validationResult.data.waSettings?.gatePass ||
-            validationResult.data.waSettings?.paymentRel ||
-            validationResult.data.waSettings?.clientNotify
-          );
+        // Upsert database notification configuration. Only touch it when this
+        // settings payload actually carries notification-related data, and even
+        // then merge with the existing row so unrelated partial saves (theme,
+        // order fields, etc.) never wipe the SMTP / email-enabled config.
+        const smtp = validationResult.data.smtpSettings ?? {};
+        const emailFlags = (validationResult.data.emailSettings ?? {}) as Record<string, unknown>;
+        const waFlags = (validationResult.data.waSettings ?? {}) as Record<string, unknown>;
+        const gateway = validationResult.data.gatewaySettings ?? {};
 
-          let providerEnum: any = null;
-          const p = validationResult.data.gatewaySettings?.provider?.toUpperCase();
+        const hasNotificationData =
+          Object.keys(smtp).length > 0 ||
+          Object.keys(emailFlags).length > 0 ||
+          Object.keys(waFlags).length > 0 ||
+          Object.keys(gateway).length > 0;
+
+        if (companyId && hasNotificationData) {
+          const EMAIL_FLAG_KEYS = ["orders", "tasks", "payments", "delivery", "orderGen", "gatePass", "paymentRel", "clientNotify"];
+          const WA_FLAG_KEYS = ["orderGen", "gatePass", "paymentRel", "clientNotify"];
+
+          const existing = await fastify.prisma.notificationConfiguration.findUnique({ where: { companyId } });
+
+          const hasSmtpValues = !!(smtp.host || smtp.port || smtp.username || smtp.password || smtp.title);
+          const hasEmailFlags = EMAIL_FLAG_KEYS.some((k) => typeof emailFlags[k] === "boolean");
+          const hasWaFlags = WA_FLAG_KEYS.some((k) => typeof waFlags[k] === "boolean");
+
+          const effectiveHost = smtp.host || existing?.smtpHost || null;
+          const smtpPortVal =
+            smtp.port === undefined || smtp.port === null || smtp.port === ""
+              ? existing?.smtpPort ?? null
+              : parseInt(String(smtp.port), 10);
+          const effectivePort = isNaN(smtpPortVal as any) ? null : smtpPortVal;
+
+          const anyEmailFlag = EMAIL_FLAG_KEYS.some((k) => emailFlags[k] === true);
+          const anyWaFlag = WA_FLAG_KEYS.some((k) => waFlags[k] === true);
+
+          const emailEnabled = hasSmtpValues || hasEmailFlags
+            ? !!((effectiveHost && effectivePort) || anyEmailFlag)
+            : (existing?.emailEnabled ?? true);
+
+          const whatsappEnabled =
+            typeof gateway.enabled === "boolean"
+              ? gateway.enabled
+              : hasWaFlags
+                ? anyWaFlag
+                : (existing?.whatsappEnabled ?? false);
+
+          let providerEnum: any = existing?.whatsappProvider ?? null;
+          const p = gateway.provider?.toUpperCase();
           if (p === "SMTP" || p === "META" || p === "TWILIO" || p === "WATI" || p === "AISENSY") {
             providerEnum = p;
           }
 
-          const smtpPortVal = validationResult.data.smtpSettings?.port 
-            ? parseInt(String(validationResult.data.smtpSettings.port), 10) 
-            : null;
-
-          const rawApiKey = validationResult.data.gatewaySettings?.apiKey;
+          const rawApiKey = gateway.apiKey;
           const encryptedApiKey = rawApiKey ? encrypt(rawApiKey) : null;
 
-          const upsertData = {
-            emailEnabled,
-            smtpHost: validationResult.data.smtpSettings?.host || null,
-            smtpPort: isNaN(smtpPortVal as any) ? null : smtpPortVal,
-            smtpUsername: validationResult.data.smtpSettings?.username || null,
-            smtpPassword: validationResult.data.smtpSettings?.password || null,
-            smtpFromEmail: validationResult.data.smtpSettings?.username || validationResult.data.emailSettings?.address || null,
-            smtpFromName: validationResult.data.smtpSettings?.title || validationResult.data.emailSettings?.name || null,
-            whatsappEnabled: validationResult.data.gatewaySettings?.enabled ?? whatsappEnabled,
-            whatsappProvider: providerEnum,
-            whatsappEndpoint: validationResult.data.gatewaySettings?.instanceId || validationResult.data.gatewaySettings?.baseUrl || null,
-            whatsappCampaignName: validationResult.data.gatewaySettings?.campaignName || null,
-            whatsappNumber: validationResult.data.gatewaySettings?.number || null,
-          };
+          const updateData: any = { emailEnabled, whatsappEnabled };
 
-          const existingConfig = await fastify.prisma.notificationConfiguration.findUnique({ where: { companyId } });
+          if (smtp.host) updateData.smtpHost = smtp.host;
+          if (!isNaN(smtpPortVal as any)) updateData.smtpPort = smtpPortVal;
+          if (smtp.username) updateData.smtpUsername = smtp.username;
+          if (smtp.password) updateData.smtpPassword = smtp.password;
+          if (smtp.username || emailFlags.address) updateData.smtpFromEmail = smtp.username || (emailFlags.address as string);
+          if (smtp.title || emailFlags.name) updateData.smtpFromName = smtp.title || (emailFlags.name as string);
+          if (providerEnum) updateData.whatsappProvider = providerEnum;
+          if (gateway.instanceId || gateway.baseUrl) updateData.whatsappEndpoint = gateway.instanceId || gateway.baseUrl;
+          if (gateway.campaignName) updateData.whatsappCampaignName = gateway.campaignName;
+          if (gateway.number) updateData.whatsappNumber = gateway.number;
+          if (encryptedApiKey) updateData.whatsappApiKey = encryptedApiKey;
 
           const createData = {
-            ...upsertData,
+            ...updateData,
             companyId,
-            ...(encryptedApiKey ? { whatsappApiKey: encryptedApiKey } : {}),
+            smtpHost: updateData.smtpHost ?? null,
+            smtpPort: updateData.smtpPort ?? null,
+            smtpUsername: updateData.smtpUsername ?? null,
+            smtpPassword: updateData.smtpPassword ?? null,
+            smtpFromEmail: updateData.smtpFromEmail ?? null,
+            smtpFromName: updateData.smtpFromName ?? null,
           };
-
-          const updateData: any = {
-            ...upsertData,
-          };
-
-          if (encryptedApiKey) {
-            updateData.whatsappApiKey = encryptedApiKey;
-          }
 
           await fastify.prisma.notificationConfiguration.upsert({
             where: { companyId },

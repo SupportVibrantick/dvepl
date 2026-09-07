@@ -56,7 +56,6 @@ async function getAllRolesRoute(
                             role.description,
                         isSystem: role.isSystem,
                         pageAccess: role.pageAccess || [],
-                        fieldPermissions: role.fieldPermissions || {},
                         actionPermissions: role.actionPermissions || {},
                         permissions:
                             role.rolePermissions.map(

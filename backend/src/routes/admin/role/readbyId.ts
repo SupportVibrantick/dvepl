@@ -86,7 +86,6 @@ async function readRoleByIdRoute(
             description: role.description,
             isSystem: role.isSystem,
             pageAccess: role.pageAccess || [],
-            fieldPermissions: role.fieldPermissions || {},
             actionPermissions: role.actionPermissions || {},
 
             permissionIds: role.rolePermissions.map(

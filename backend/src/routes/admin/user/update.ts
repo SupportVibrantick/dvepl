@@ -55,7 +55,7 @@ async function updateUserRoute(
         }
 
         const { id } = request.params as { id: string };
-        const { name, email, phone, isActive, role, designation, pageAccess, fieldPermissions, actionPermissions, password, teamId, hasOverride } = request.body as any;
+        const { name, email, phone, isActive, role, designation, pageAccess, actionPermissions, password, teamId, hasOverride } = request.body as any;
 
         // Prevent self-role-escalation
         if (id === loggedInUserId && ((request.body as any).roleIds || role)) {
@@ -242,8 +242,8 @@ async function updateUserRoute(
         });
 
         // Save custom access metadata in the database.
-        if (pageAccess || fieldPermissions || actionPermissions || designation !== undefined || hasOverride !== undefined) {
-          const profileOverride = hasOverride !== undefined ? !!hasOverride : (pageAccess !== undefined || fieldPermissions !== undefined || actionPermissions !== undefined);
+        if (pageAccess || actionPermissions || designation !== undefined || hasOverride !== undefined) {
+          const profileOverride = hasOverride !== undefined ? !!hasOverride : (pageAccess !== undefined || actionPermissions !== undefined);
           await fastify.prisma.userAccessProfile.upsert({
             where: { userId: id },
             create: {
@@ -251,15 +251,13 @@ async function updateUserRoute(
               designation: designation || "Team Member",
               hasOverride: profileOverride,
               pageAccess: pageAccess || [],
-              fieldPermissions: fieldPermissions || {},
               actionPermissions: actionPermissions || { create: true, edit: true, delete: false, export: true },
             },
             update: {
               ...(pageAccess !== undefined ? { pageAccess } : {}),
-              ...(fieldPermissions !== undefined ? { fieldPermissions } : {}),
               ...(actionPermissions !== undefined ? { actionPermissions } : {}),
               ...(designation !== undefined ? { designation } : {}),
-              ...(hasOverride !== undefined ? { hasOverride } : (pageAccess !== undefined || fieldPermissions !== undefined || actionPermissions !== undefined ? { hasOverride: true } : {})),
+              ...(hasOverride !== undefined ? { hasOverride } : (pageAccess !== undefined || actionPermissions !== undefined ? { hasOverride: true } : {})),
             },
           });
         }

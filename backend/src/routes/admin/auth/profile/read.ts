@@ -72,12 +72,6 @@ async function readProfileRoute(
             ? mainRole.actionPermissions
             : up?.actionPermissions || { create: true, edit: true, delete: false, export: true };
 
-        const resolvedFieldPermissions = hasOverride
-          ? up?.fieldPermissions || {}
-          : mainRole?.fieldPermissions && Object.keys(mainRole.fieldPermissions).length > 0
-            ? mainRole.fieldPermissions
-            : up?.fieldPermissions || {};
-
         adminLogs.info("Profile fetched", {
           userId,
         });
@@ -97,7 +91,6 @@ async function readProfileRoute(
             department: user.employee?.department || null,
             roles: user.userRoles.map((r) => r.role.name),
             pageAccess: resolvedPageAccess,
-            fieldPermissions: resolvedFieldPermissions,
             actionPermissions: resolvedActionPermissions,
           },
         });

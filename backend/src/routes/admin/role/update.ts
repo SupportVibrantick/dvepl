@@ -49,7 +49,7 @@ async function updateRoleRoute(
 
         const { id } = request.params as { id: string };
 
-        const { name, description, permissionIds, pageAccess, fieldPermissions, actionPermissions } = validation.data;
+        const { name, description, permissionIds, pageAccess, actionPermissions } = validation.data;
 
         const companyId = (request.admin as any)?.companyId;
 
@@ -225,7 +225,6 @@ async function updateRoleRoute(
               ...(name !== undefined ? { name } : {}),
               ...(description !== undefined ? { description } : {}),
               ...(pageAccess !== undefined ? { pageAccess } : {}),
-              ...(fieldPermissions !== undefined ? { fieldPermissions } : {}),
               ...(actionPermissions !== undefined ? { actionPermissions } : {}),
             },
           });
@@ -254,7 +253,6 @@ async function updateRoleRoute(
 
           const roleNeedsPropagation =
             pageAccess !== undefined ||
-            fieldPermissions !== undefined ||
             actionPermissions !== undefined;
 
           if (roleNeedsPropagation) {
@@ -304,18 +302,6 @@ async function updateRoleRoute(
                 }
               }
 
-              const mergedFieldPermissions: Record<string, any> = {};
-              for (const r of latestRoles) {
-                const fp = (r.fieldPermissions as Record<string, any>) || {};
-                for (const [field, config] of Object.entries(fp)) {
-                  if (!mergedFieldPermissions[field]) {
-                    mergedFieldPermissions[field] = { ...config };
-                  } else if ((config as any)?.view === true) {
-                    mergedFieldPermissions[field].view = true;
-                  }
-                }
-              }
-
               await tx.userAccessProfile.update({
                 where: { userId: u.id },
                 data: {
@@ -323,7 +309,6 @@ async function updateRoleRoute(
                   actionPermissions: Object.keys(mergedActionPermissions).length > 0
                     ? mergedActionPermissions
                     : {},
-                  fieldPermissions: mergedFieldPermissions,
                 },
               });
             }

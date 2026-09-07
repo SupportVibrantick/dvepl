@@ -147,7 +147,10 @@ async function adminTaskNotificationRoutes(
           }
         });
 
+        const companyId = (request.user as any)?.companyId || (request.admin as any)?.companyId;
         let sentCount = 0;
+        let failCount = 0;
+        let lastErrorMsg: string | null = null;
 
         for (const task of overdueTasks) {
           const assignedUsers = task.assignments
@@ -155,24 +158,46 @@ async function adminTaskNotificationRoutes(
             .filter((u: any) => u && u.email);
 
           for (const user of assignedUsers) {
-            await NotificationService.sendCustomNotification({
-              to: user.email,
-              subject: `Overdue Task Reminder: ${task.title}`,
-              message: `Hello ${user.name || "User"},\n\nThis is a reminder that the task "${task.title}" is overdue.\nDue Date was: ${new Date(task.dueDate).toLocaleDateString()}.\nPriority: ${task.priority}.\nStatus: ${task.status}.`,
-              eventCode: "TASK_REMINDER"
-            });
-            sentCount++;
+            try {
+              await NotificationService.sendCustomNotification({
+                to: user.email,
+                subject: `Overdue Task Reminder: ${task.title}`,
+                message: `Hello ${user.name || "User"},\n\nThis is a reminder that the task "${task.title}" is overdue.\nDue Date was: ${new Date(task.dueDate).toLocaleDateString()}.\nPriority: ${task.priority}.\nStatus: ${task.status}.`,
+                eventCode: "TASK_REMINDER",
+                relatedModule: "TASK",
+                relatedRecordId: task.id,
+              }, companyId);
+              sentCount++;
+            } catch (err: any) {
+              failCount++;
+              lastErrorMsg = err?.message || String(err);
+              console.warn(`[SendReminders] Could not send reminder to ${user.email}:`, err?.message || err);
+            }
           }
         }
 
         adminLogs.info("Overdue reminders run triggered manually", {
           overdueCount: overdueTasks.length,
           notificationsSent: sentCount,
+          notificationsFailed: failCount,
         });
+
+        if (failCount > 0 && sentCount === 0) {
+          return reply.status(200).send({
+            success: false,
+            message: `Could not send reminders (${lastErrorMsg || "Check notification & email settings"}).`,
+            data: { sentCount, failCount, overdueCount: overdueTasks.length },
+          });
+        }
+
+        const message = overdueTasks.length === 0
+          ? "No overdue tasks found."
+          : `Reminders run completed. Dispatched ${sentCount} alert(s) for ${overdueTasks.length} task(s)${failCount > 0 ? ` (${failCount} failed)` : ""}.`;
 
         return reply.status(200).send({
           success: true,
-          message: `Reminders run completed. Dispatched ${sentCount} alert(s) for ${overdueTasks.length} task(s).`,
+          message,
+          data: { sentCount, failCount, overdueCount: overdueTasks.length },
         });
       } catch (error: any) {
         console.error(error);

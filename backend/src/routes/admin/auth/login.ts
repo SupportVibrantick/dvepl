@@ -123,12 +123,6 @@ async function adminLoginRoutes(
             ? mainRole.actionPermissions
             : up?.actionPermissions || { create: true, edit: true, delete: false, export: true };
 
-        const resolvedFieldPermissions = hasOverride
-          ? up?.fieldPermissions || {}
-          : mainRole?.fieldPermissions && Object.keys(mainRole.fieldPermissions).length > 0
-            ? mainRole.fieldPermissions
-            : up?.fieldPermissions || {};
-
         return reply.status(200).send({
           success: true,
           message: "Login successfully",
@@ -143,7 +137,6 @@ async function adminLoginRoutes(
             roles,
             designation: up?.designation || "Team Member",
             pageAccess: resolvedPageAccess,
-            fieldPermissions: resolvedFieldPermissions,
             actionPermissions: resolvedActionPermissions,
           },
         });
