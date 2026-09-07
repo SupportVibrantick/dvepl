@@ -11,11 +11,11 @@ import { adminLogs } from "../../../services/logger/contextLogger";
 import { loginSchema } from "../../../schemas/admin/auth/auth.schema";
 import { getExpiryTime } from "../../../utils/getExpirytime";
 
-const jwtSecret = process.env.JWT_ACCESS_SECRET;
-const jwtExpiration = process.env.JWT_ACCESS_EXPIRES || "30d";
+const jwtSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
+const jwtExpiration = process.env.JWT_ACCESS_EXPIRES || process.env.JWT_EXPIRATION || "30d";
 
 if (!jwtSecret) {
-  throw new Error("JWT_ACCESS_SECRET environment variable is not set");
+  throw new Error("JWT_ACCESS_SECRET or JWT_SECRET environment variable is not set");
 }
 
 async function adminLoginRoutes(
