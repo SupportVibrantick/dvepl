@@ -271,12 +271,6 @@ async function createUserRoute(
           Object.keys(mainRole.actionPermissions).length > 0
             ? mainRole.actionPermissions
             : null;
-        const roleFieldPermissions =
-          mainRole?.fieldPermissions &&
-          typeof mainRole.fieldPermissions === "object" &&
-          !Array.isArray(mainRole.fieldPermissions)
-            ? mainRole.fieldPermissions
-            : null;
 
         await fastify.prisma.userAccessProfile.create({ data: {
           userId: createdUser.id,
@@ -284,7 +278,6 @@ async function createUserRoute(
           pageAccess: rolePageAccess.length > 0
             ? rolePageAccess
             : ["dashboard", "vendors", "orders"],
-          fieldPermissions: roleFieldPermissions || {},
           actionPermissions: roleActionPermissions || {
             dashboard: { create: false, edit: false, delete: false, export: false },
             vendors: { create: true, edit: true, delete: false, export: true },

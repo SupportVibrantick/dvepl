@@ -318,14 +318,29 @@ async function adminRoutes(
           requiredPermissions = ["exportOrder.view"];
         }
       } else if (url.includes("/dynamic/")) {
-        requiredPermissions = ["settings.update"];
-      } else if (url.includes("/upload/")) {
-        requiredPermissions = ["settings.update"];
-      } else if (url.includes("/workflow/")) {
-        if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
+        // Dynamic field/record/schema/module endpoints carry the target module in
+        // the URL (moduleKey query/path or a database-owned record/field id),
+        // which authorizePermissions resolves. Reads only need that module's page
+        // access; writes need the matching action on it.
+        if (req.method === "GET") {
+          requiredPermissions = ["dashboard.read"];
+        } else if (req.method === "DELETE") {
+          requiredPermissions = ["settings.delete"];
+        } else if (req.method === "PUT" || req.method === "PATCH") {
           requiredPermissions = ["settings.update"];
         } else {
-          requiredPermissions = ["settings.view"];
+          requiredPermissions = ["settings.create"];
+        }
+      } else if (url.includes("/upload/")) {
+        // Generic file upload is not tied to a module and is used across all
+        // pages; the resulting file only becomes data once linked to a
+        // module record, which is still authorized on its own endpoint.
+        requiredPermissions = [];
+      } else if (url.includes("/workflow/")) {
+        if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
+          requiredPermissions = ["workflow.update"];
+        } else {
+          requiredPermissions = ["workflow.view"];
         }
       } else if (url.includes("/custom-fields/")) {
         if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {

@@ -14,7 +14,6 @@ interface LoginResponse {
     roles: string[];
     designation?: string;
     pageAccess?: string[];
-    fieldPermissions?: Record<string, string[]>;
     actionPermissions?: StoredActionPermissions;
   };
 }
@@ -28,7 +27,6 @@ export interface ProfileResponse {
   roles: string[];
   designation?: string;
   pageAccess?: string[];
-  fieldPermissions?: Record<string, string[]>;
   actionPermissions?: StoredActionPermissions;
 }
 

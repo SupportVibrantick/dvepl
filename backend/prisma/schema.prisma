@@ -346,7 +346,6 @@ model Role {
   description       String?
   isSystem          Boolean          @default(false)
   pageAccess        Json             @default("[]")
-  fieldPermissions  Json             @default("{}")
   actionPermissions Json             @default("{}")
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
@@ -436,7 +435,6 @@ model UserAccessProfile {
   designation       String   @default("Team Member")
   hasOverride       Boolean  @default(false)
   pageAccess        Json     @default("[]")
-  fieldPermissions  Json     @default("{}")
   actionPermissions Json     @default("{\"edit\": true, \"create\": true, \"delete\": false, \"export\": true}")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -2744,24 +2742,24 @@ model CustomFieldValue {
 }
 
 model NotificationConfiguration {
-  id               String                @id @default(uuid())
-  companyId        String                @unique
-  emailEnabled     Boolean               @default(true)
-  smtpHost         String?
-  smtpPort         Int?
-  smtpUsername     String?
-  smtpPassword     String?
-  smtpFromEmail    String?
-  smtpFromName     String?
-  whatsappEnabled  Boolean               @default(false)
-  whatsappProvider NotificationProvider?
-  whatsappApiKey        String?
-  whatsappEndpoint      String?
-  whatsappCampaignName  String?
-  whatsappNumber        String?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  company               Company               @relation(fields: [companyId], references: [id])
+  id                   String                @id @default(uuid())
+  companyId            String                @unique
+  emailEnabled         Boolean               @default(true)
+  smtpHost             String?
+  smtpPort             Int?
+  smtpUsername         String?
+  smtpPassword         String?
+  smtpFromEmail        String?
+  smtpFromName         String?
+  whatsappEnabled      Boolean               @default(false)
+  whatsappProvider     NotificationProvider?
+  whatsappApiKey       String?
+  whatsappEndpoint     String?
+  whatsappCampaignName String?
+  whatsappNumber       String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  company              Company               @relation(fields: [companyId], references: [id])
 }
 
 model NotificationEvent {

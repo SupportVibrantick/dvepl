@@ -230,7 +230,6 @@ export interface Role {
   description?: string | null;
   isSystem: boolean;
   pageAccess?: any;
-  fieldPermissions?: any;
   actionPermissions?: any;
   createdAt: string;
   updatedAt: string;

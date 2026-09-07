@@ -70,11 +70,6 @@ async function readUserByIdRoute(
                   : (mainRole?.pageAccess && (mainRole.pageAccess as any[]).length > 0
                       ? mainRole.pageAccess
                       : (up?.pageAccess || []));
-                const fieldPermissions = hasOverride
-                  ? (up?.fieldPermissions || {})
-                  : (mainRole?.fieldPermissions && Object.keys(mainRole.fieldPermissions).length > 0
-                      ? mainRole.fieldPermissions
-                      : (up?.fieldPermissions || {}));
                 const actionPermissions = hasOverride
                   ? (up?.actionPermissions || { create: true, edit: true, delete: false, export: true })
                   : (mainRole?.actionPermissions && Object.keys(mainRole.actionPermissions).length > 0
@@ -93,7 +88,6 @@ async function readUserByIdRoute(
                             designation: up?.designation || "Team Member",
                             hasOverride,
                             pageAccess,
-                            fieldPermissions,
                             actionPermissions,
                         },
 

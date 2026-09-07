@@ -48,7 +48,25 @@ const getModuleActions = (value: unknown, moduleKey: string): ModuleActions => {
   };
 };
 
+// Transversal /dynamic/ endpoints are module-keyed: the target module is passed
+// in the URL (query ?moduleKey= or a path segment such as /record/:moduleKey), so
+// authorization must be checked against that module instead of the settings module.
+const moduleFromDynamicUrl = (url: string): string | null => {
+  if (!url.includes("/dynamic/")) return null;
+
+  const queryMatch = url.match(/[?&]moduleKey=([^&#]+)/);
+  if (queryMatch) return decodeURIComponent(queryMatch[1]);
+
+  const pathMatch = url.match(/\/dynamic\/(?:record\/import|schema|record|module)\/([^/?#]+)/);
+  if (pathMatch && pathMatch[1] !== "id") return decodeURIComponent(pathMatch[1]);
+
+  return null;
+};
+
 const getModuleForRequest = (url: string): string | null => {
+  const dynamicModule = moduleFromDynamicUrl(url);
+  if (dynamicModule) return dynamicModule;
+
   const routeModules: Array<[string, string]> = [
     ["/company/", "companies"], ["/branch/", "branches"], ["/department/", "departments"],
     ["/team/", "teams"], ["/designation/", "designations"], ["/cost-center/", "cost_centers"],
@@ -66,7 +84,7 @@ const getModuleForRequest = (url: string): string | null => {
     ["/vendor-product/", "vendors"], ["/inventory-tracking/", "inventory"],
     ["/goods-receipt/", "inventory"], ["/purchase-order/", "inventory"],
     ["/quotetender/", "orders"], ["/dynamic/", "settings"], ["/upload/", "settings"],
-    ["/export-orders/", "export_orders"], ["/workflow/", "settings"],
+    ["/export-orders/", "export_orders"], ["/workflow/", "workflow_tracker"],
     ["/employee-contact/", "employees"], ["/employee-emergency-contact/", "employees"],
     ["/employee-education/", "employees"], ["/employee-experience/", "employees"],
     ["/reference-code-counter/", "reference_codes"],
@@ -104,6 +122,7 @@ const getModuleForPermission = (permissions: string[]): string | null => {
     vendor: "vendors",
     inventory: "inventory",
     exportOrder: "export_orders",
+    workflow: "workflow_tracker",
     payment: "finance",
     tenderRequest: "tender_requests",
     tender: "tenders",
@@ -138,182 +157,6 @@ const getRequiredAction = (url: string, permissions: string[]): ActionName | nul
   if (permissions.some((permission) => permission.includes(".update") || permission.includes(".edit"))) return "edit";
   if (permissions.some((permission) => permission.includes(".delete") || permission.includes(".remove"))) return "delete";
   return null;
-};
-
-// Maps PRBAC field-permission keys to the exact response field names exposed by
-// the corresponding module API.  These are used to strip fields the requesting
-// user is explicitly denied from seeing (view === false).
-const FIELD_PERMISSION_RESPONSE_MAP: Record<string, Record<string, string[]>> = {
-  companies: {
-    company_name: ["name"],
-    company_tax_id: ["gst", "pan"],
-  },
-  branches: {
-    branch_name: ["name"],
-    branch_code: ["code"],
-  },
-  departments: {
-    department_name: ["name"],
-    department_code: ["code"],
-  },
-  teams: {
-    team_name: ["name"],
-  },
-  designations: {
-    designation_title: ["title"],
-  },
-  cost_centers: {
-    budget_limit: ["budget"],
-  },
-  employees: {
-    employee_code: ["employeeCode"],
-    employee_first_name: ["firstName"],
-    employee_last_name: ["lastName"],
-    date_of_birth: ["dateOfBirth"],
-  },
-  attendance: {
-    attendance_date: ["date"],
-    check_in: ["checkIn"],
-    check_out: ["checkOut"],
-  },
-  leaves: {
-    leave_type: ["leaveType"],
-    leave_reason: ["reason"],
-  },
-  holidays: {
-    holiday_name: ["name"],
-  },
-  shift_management: {
-    shift_name: ["name"],
-  },
-  payroll: {
-    basic_salary: ["basic"],
-    hra_allowance: ["hra"],
-    allowances: ["allowances"],
-    deductions: ["deductions"],
-    total_ctc: ["ctc"],
-  },
-  documents: {
-    document_name: ["fileName"],
-  },
-  tasks: {
-    task_title: ["title"],
-    task_priority: ["priority"],
-    task_due_date: ["dueDate"],
-  },
-  customers: {
-    customer_name: ["name"],
-    customer_company: ["firmName"],
-    customer_pan: ["pan"],
-    customer_gstin: ["gst"],
-    payment_terms: ["paymentTerms"],
-  },
-  contacts: {
-    contact_name: ["name"],
-  },
-  communication: {
-    communication_date: ["createdAt"],
-  },
-  vendors: {
-    vendor_name: ["name"],
-    vendor_category: ["category"],
-    vendor_contact_person: ["contactPerson"],
-    vendor_phone: ["phone"],
-    vendor_email: ["email"],
-    vendor_gstin: ["gstNumber"],
-    vendor_address: ["address"],
-  },
-  inventory: {
-    inventory_qty: ["quantity"],
-  },
-  users: {
-    password_hash: ["passwordHash"],
-  },
-  roles: {
-    is_system_role: ["isSystem"],
-  },
-  orders: {
-    po_value: ["grandTotal"],
-    delivery_month_target: ["deliveryMonthTarget"],
-    concerned_person: ["drawingConcernedPerson"],
-    drawing_status: ["drawingStatus"],
-    order_client_name: ["partyName"],
-    po_date: ["poDate"],
-  },
-  delivery: {
-    dispatch_date: ["dispatchDate"],
-    delivery_status: ["status"],
-  },
-  tenders: {
-    tender_no: ["tenderNo"],
-    tender_name: ["title"],
-    tender_value: ["estimatedCost"],
-  },
-  technical_clarifications: {
-    clarification_query: ["question"],
-  },
-  government_departments: {
-    gov_dept_name: ["name"],
-  },
-  sections: {
-    section_name: ["name"],
-  },
-  divisions: {
-    division_name: ["name"],
-  },
-  sub_divisions: {
-    sub_division_name: ["name"],
-  },
-};
-
-const snakeToCamel = (key: string): string =>
-  key.replace(/_([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
-
-// Collect the exact response field names that must be hidden for the current
-// module based on the user's fieldPermissions (view === false).
-const collectHiddenResponseFields = (
-  moduleKey: string,
-  fieldPermissions: unknown,
-): Set<string> => {
-  const hidden = new Set<string>();
-  if (!isRecord(fieldPermissions)) return hidden;
-
-  const moduleMap = FIELD_PERMISSION_RESPONSE_MAP[moduleKey];
-  for (const [permissionKey, config] of Object.entries(fieldPermissions)) {
-    const isHidden = isRecord(config) ? config.view === false : config === false;
-    if (!isHidden) continue;
-
-    const responseFields = moduleMap?.[permissionKey];
-    if (responseFields && responseFields.length > 0) {
-      responseFields.forEach((field) => hidden.add(field));
-    } else {
-      hidden.add(snakeToCamel(permissionKey));
-    }
-  }
-  return hidden;
-};
-
-// Strip hidden fields from the payload at the record level (mirrors the
-// client-side column hiding behaviour in the dashboard tables).
-const stripHiddenFields = (value: unknown, hidden: Set<string>): void => {
-  if (!value || typeof value !== "object") return;
-  if (Array.isArray(value)) {
-    value.forEach((item) => stripHiddenFields(item, hidden));
-    return;
-  }
-  const record = value as Record<string, unknown>;
-  if (
-    Object.prototype.hasOwnProperty.call(record, "data") &&
-    record.data !== undefined &&
-    record.data !== null &&
-    typeof record.data === "object"
-  ) {
-    stripHiddenFields(record.data, hidden);
-    return;
-  }
-  for (const key of Object.keys(record)) {
-    if (hidden.has(key)) delete record[key];
-  }
 };
 
 async function authPlugin(fastify: FastifyInstance) {
@@ -394,21 +237,6 @@ async function authPlugin(fastify: FastifyInstance) {
           }
         }
 
-        const mergedRoleFieldPermissions: Record<string, any> = {};
-        for (const role of allRoles) {
-          const fp = (role.fieldPermissions as Record<string, any>) || {};
-          for (const [field, config] of Object.entries(fp)) {
-            if (!mergedRoleFieldPermissions[field]) {
-              mergedRoleFieldPermissions[field] = { ...config };
-            } else {
-              // Union: if ANY role grants view, it's granted
-              if ((config as any)?.view === true) {
-                mergedRoleFieldPermissions[field].view = true;
-              }
-            }
-          }
-        }
-
         const resolvedPageAccess = hasOverride
           ? (up?.pageAccess as string[] || [])
           : (mergedRolePageAccess.length > 0
@@ -421,12 +249,6 @@ async function authPlugin(fastify: FastifyInstance) {
               ? mergedRoleActionPermissions
               : (up?.actionPermissions || { create: true, edit: true, delete: false, export: true }));
 
-        const resolvedFieldPermissions = hasOverride
-          ? (up?.fieldPermissions || {})
-          : (Object.keys(mergedRoleFieldPermissions).length > 0
-              ? mergedRoleFieldPermissions
-              : (up?.fieldPermissions || {}));
-
         const tokenUser = {
           id: decoded.userId,
           companyId: activeCompanyId,
@@ -435,7 +257,6 @@ async function authPlugin(fastify: FastifyInstance) {
           uiAccessProfile: {
             pageAccess: resolvedPageAccess,
             actionPermissions: resolvedActionPermissions,
-            fieldPermissions: resolvedFieldPermissions,
           },
         };
         (request as any).user = tokenUser;
@@ -469,8 +290,35 @@ async function authPlugin(fastify: FastifyInstance) {
           return;
         }
 
+        // The dynamic module list is app-wide metadata read by every module page on load.
+        if (request.method === "GET" && request.url.includes("/dynamic/module")) {
+          return;
+        }
+
         const uiAccessProfile = (request.admin as any)?.uiAccessProfile;
-        const moduleKey = getModuleForRequest(request.url) ?? getModuleForPermission(allowedPermissions);
+        let moduleKey = getModuleForRequest(request.url) ?? getModuleForPermission(allowedPermissions);
+
+        // /dynamic/record/:id and /dynamic/record/id/:id routes don't carry the
+        // owning module in the URL, so resolve it from the database.
+        if (moduleKey === "settings" && request.url.includes("/dynamic/")) {
+          const idRoute = request.url.match(/\/dynamic\/record\/id\/([^/?#]+)/);
+          const crudRoute = request.url.match(/\/dynamic\/record\/([^/?#]+)/);
+          const candidateId =
+            idRoute?.[1] ??
+            ((request.method === "PUT" || request.method === "DELETE")
+              ? crudRoute?.[1]
+              : undefined);
+          if (candidateId && !request.url.includes("/dynamic/module")) {
+            const dynamicRecord =
+              await request.server.prisma.dynamicRecord.findUnique({
+                where: { id: candidateId },
+                include: { module: true },
+              });
+            if (dynamicRecord?.module?.moduleKey) {
+              moduleKey = dynamicRecord.module.moduleKey;
+            }
+          }
+        }
 
         const roles: string[] = (request.admin as any)?.roles ?? [];
         const isAdmin = roles.some((r: string) => r === "Admin");
@@ -535,30 +383,6 @@ async function authPlugin(fastify: FastifyInstance) {
   }
 );
 
-  // ==========================
-  // Server-side field permission enforcement
-  // ==========================
-  fastify.addHook("onSend", async (request: FastifyRequest, reply: FastifyReply, payload: any) => {
-    try {
-      if (reply.statusCode >= 400 || typeof payload !== "string") return payload;
-      if (swaggerSafePaths.some((p) => request.url.startsWith(p))) return payload;
-
-      const fieldPermissions = (request.admin as any)?.uiAccessProfile?.fieldPermissions;
-      if (!fieldPermissions || Object.keys(fieldPermissions).length === 0) return payload;
-
-      const moduleKey = getModuleForRequest(request.url);
-      if (!moduleKey) return payload;
-
-      const hidden = collectHiddenResponseFields(moduleKey, fieldPermissions);
-      if (hidden.size === 0) return payload;
-
-      const parsed = JSON.parse(payload);
-      stripHiddenFields(parsed, hidden);
-      return JSON.stringify(parsed);
-    } catch {
-      return payload;
-    }
-  });
 }
 
 export default fp(authPlugin, {

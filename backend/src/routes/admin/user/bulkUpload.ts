@@ -240,12 +240,6 @@ async function adminUserBulkUploadRoutes(
               Object.keys(activeRole.actionPermissions).length > 0
                 ? activeRole.actionPermissions
                 : null;
-            const roleFieldPermissions =
-              activeRole?.fieldPermissions &&
-              typeof activeRole.fieldPermissions === "object" &&
-              !Array.isArray(activeRole.fieldPermissions)
-                ? activeRole.fieldPermissions
-                : null;
 
             await fastify.prisma.userAccessProfile.create({ data: {
               userId: createdUser.id,
@@ -253,7 +247,6 @@ async function adminUserBulkUploadRoutes(
               pageAccess: rolePageAccess.length > 0
                 ? rolePageAccess
                 : ["dashboard", "vendors", "orders"],
-              fieldPermissions: roleFieldPermissions || {},
               actionPermissions: roleActionPermissions || {
                 dashboard: { create: false, edit: false, delete: false, export: false },
                 vendors: { create: true, edit: true, delete: false, export: true },

@@ -72,7 +72,6 @@ interface UserItem {
   phone?: string | null;
   role: string;
   pageAccess?: string[];
-  fieldPermissions?: Record<string, { view: boolean; edit: boolean }>;
   actionPermissions?: StoredActionPermissions;
   hasOverride?: boolean;
   password?: string;
@@ -168,9 +167,6 @@ export function SettingsPage() {
   // Quick Preset state
   const [pageAccessState, setPageAccessState] = useState<
     Record<string, boolean>
-  >({});
-  const [fieldPermsState, setFieldPermsState] = useState<
-    Record<string, { view: boolean; edit: boolean }>
   >({});
   const [actionPermsState, setActionPermsState] = useState<PageActionPermissions>({});
   const [selectedActionModule, setSelectedActionModule] = useState("dashboard");
@@ -339,7 +335,6 @@ export function SettingsPage() {
               : u.designation || "Team Member",
           role: u.role || "user",
           pageAccess: u.pageAccess ?? ["dashboard", "vendors", "orders"],
-          fieldPermissions: u.fieldPermissions || {},
           actionPermissions: u.actionPermissions || {
             create: true,
             edit: true,
@@ -360,7 +355,6 @@ export function SettingsPage() {
           designation: "Staff Member",
           role: u.id === store.currentUserId ? "admin" : "user",
           pageAccess: ["dashboard", "vendors", "orders"],
-          fieldPermissions: {},
           actionPermissions: {
             create: true,
             edit: true,
@@ -380,7 +374,6 @@ export function SettingsPage() {
         designation: "Staff Member",
         role: "user",
         pageAccess: ["dashboard", "vendors", "orders"],
-        fieldPermissions: {},
         actionPermissions: {
           create: true,
           edit: true,
@@ -719,131 +712,6 @@ export function SettingsPage() {
     }
   }, [selectedResourceKey]);
 
-
-  // Fields Access List
-  const fieldsAccessList = [
-    // Organization
-    { key: "company_name", label: "Company Name", tag: "companies" },
-    { key: "company_gst", label: "GSTIN", tag: "companies" },
-    { key: "company_pan", label: "PAN", tag: "companies" },
-    { key: "company_email", label: "Email Address", tag: "companies" },
-    { key: "company_phone", label: "Phone Number", tag: "companies" },
-    { key: "company_address", label: "Registered Address", tag: "companies" },
-    { key: "company_is_active", label: "Active Status", tag: "companies" },
-    { key: "branch_name", label: "Branch Name", tag: "branches" },
-    { key: "branch_code", label: "Branch Code", tag: "branches" },
-    { key: "branch_company", label: "Company", tag: "branches" },
-    { key: "branch_address", label: "Branch Address", tag: "branches" },
-    { key: "branch_city", label: "City", tag: "branches" },
-    { key: "branch_state", label: "State", tag: "branches" },
-    { key: "branch_pincode", label: "Pincode", tag: "branches" },
-    { key: "branch_is_active", label: "Active Status", tag: "branches" },
-    { key: "department_name", label: "Department Name", tag: "departments" },
-    { key: "department_code", label: "Department Code", tag: "departments" },
-    { key: "department_branch", label: "Branch", tag: "departments" },
-    { key: "department_is_active", label: "Active Status", tag: "departments" },
-    { key: "team_name", label: "Team Name", tag: "teams" },
-    { key: "team_department", label: "Department", tag: "teams" },
-    { key: "team_is_active", label: "Active Status", tag: "teams" },
-    { key: "cost_center_code", label: "Cost Center Code", tag: "cost_centers" },
-    { key: "cost_center_name", label: "Cost Center Name", tag: "cost_centers" },
-    { key: "cost_center_budget", label: "Budget Allocation", tag: "cost_centers" },
-    { key: "cost_center_department", label: "Department", tag: "cost_centers" },
-
-    // Finance / Banking
-    { key: "payment_date", label: "Payment Date", tag: "finance" },
-    { key: "bank_name", label: "Bank Name", tag: "finance" },
-    { key: "bank_account_no", label: "Bank Account Number", tag: "finance" },
-    { key: "ifsc_code", label: "IFSC Code", tag: "finance" },
-    { key: "advance_amount", label: "Advance Paid", tag: "finance" },
-    { key: "balance_due", label: "Balance Due", tag: "finance" },
-    { key: "discount_margin", label: "Allowed Discount Margin %", tag: "finance" },
-    { key: "markup_percent", label: "Markup Percentage", tag: "finance" },
-
-    // HRMS
-    { key: "employee_code", label: "Employee Code", tag: "employees" },
-    { key: "employee_first_name", label: "First Name", tag: "employees" },
-    { key: "employee_last_name", label: "Last Name", tag: "employees" },
-    { key: "date_of_birth", label: "Date of Birth", tag: "employees" },
-    { key: "pan_no", label: "PAN Card Number", tag: "employees" },
-    { key: "aadhaar_no", label: "Aadhaar Card Number", tag: "employees" },
-    { key: "pf_uan", label: "PF UAN Number", tag: "employees" },
-    { key: "attendance_date", label: "Attendance Date", tag: "attendance" },
-    { key: "check_in", label: "Check-in Time", tag: "attendance" },
-    { key: "check_out", label: "Check-out Time", tag: "attendance" },
-    { key: "leave_type", label: "Leave Type", tag: "leaves" },
-    { key: "leave_reason", label: "Leave Reason", tag: "leaves" },
-    { key: "holiday_name", label: "Holiday Name", tag: "holidays" },
-    { key: "shift_name", label: "Shift Name", tag: "shift_management" },
-    { key: "basic_salary", label: "Basic Salary & Payroll", tag: "payroll" },
-    { key: "hra_allowance", label: "HRA Allowance", tag: "payroll" },
-    { key: "allowances", label: "HRMS Allowances", tag: "payroll" },
-    { key: "deductions", label: "HRMS Deductions", tag: "payroll" },
-    { key: "total_ctc", label: "Total CTC Value", tag: "payroll" },
-    { key: "document_name", label: "Document Name", tag: "documents" },
-    { key: "task_title", label: "Task Title", tag: "tasks" },
-    { key: "task_priority", label: "Task Priority", tag: "tasks" },
-    { key: "task_due_date", label: "Task Due Date", tag: "tasks" },
-
-    // CRM / Customers & Vendors
-    { key: "customer_name", label: "Customer Name", tag: "customers" },
-    { key: "customer_company", label: "Customer Company", tag: "customers" },
-    { key: "customer_pan", label: "Customer PAN", tag: "customers" },
-    { key: "customer_gstin", label: "Customer GSTIN", tag: "customers" },
-    { key: "credit_limit", label: "Customer Credit Limit", tag: "customers" },
-    { key: "payment_terms", label: "Payment Term (Days)", tag: "customers" },
-    { key: "contact_name", label: "Contact Person Name", tag: "contacts" },
-    { key: "communication_date", label: "Communication Date", tag: "communication" },
-    { key: "vendor_name", label: "Vendor Name", tag: "vendors" },
-    { key: "vendor_category", label: "Vendor Category", tag: "vendors" },
-    { key: "vendor_contact_person", label: "Vendor Contact Person", tag: "vendors" },
-    { key: "vendor_phone", label: "Vendor Phone", tag: "vendors" },
-    { key: "vendor_email", label: "Vendor Email", tag: "vendors" },
-    { key: "vendor_gstin", label: "Vendor GSTIN", tag: "vendors" },
-    { key: "vendor_address", label: "Vendor Address", tag: "vendors" },
-    { key: "vendor_payment_terms", label: "Vendor Payment Terms", tag: "vendors" },
-    { key: "inventory_qty", label: "Stock Qty", tag: "inventory" },
-    { key: "min_stock_level", label: "Min Stock Level", tag: "inventory" },
-
-    // Security
-    { key: "password_hash", label: "User Password Hash", tag: "users" },
-    { key: "is_system_role", label: "Is System Role Indicator", tag: "roles" },
-
-    // Orders
-    { key: "po_number", label: "PO Number", tag: "orders" },
-    { key: "po_value", label: "PO Total Value", tag: "orders" },
-    { key: "delivery_month_target", label: "Delivery Month Target", tag: "orders" },
-    { key: "concerned_person", label: "Concerned Person", tag: "orders" },
-    { key: "drawing_status", label: "Drawing Status", tag: "orders" },
-    { key: "material_status", label: "Material Status", tag: "orders" },
-    { key: "plant_status", label: "Plant Status", tag: "orders" },
-    { key: "order_client_name", label: "Order Client Name", tag: "orders" },
-    { key: "po_date", label: "PO Date", tag: "orders" },
-
-    // Delivery
-    { key: "dispatch_date", label: "Dispatch Date", tag: "delivery" },
-    { key: "delivery_status", label: "Delivery Status", tag: "delivery" },
-    { key: "vehicle_no", label: "Vehicle Number", tag: "delivery" },
-    { key: "tracking_no", label: "Tracking Number", tag: "delivery" },
-
-    // Tenders
-    { key: "tender_request_no", label: "Tender Request No", tag: "tender_requests" },
-    { key: "tender_request_client", label: "Tender Request Client", tag: "tender_requests" },
-    { key: "tender_no", label: "Tender Number", tag: "tenders" },
-    { key: "tender_name", label: "Tender Name", tag: "tenders" },
-    { key: "tender_value", label: "Tender Value", tag: "tenders" },
-    { key: "clarification_query", label: "Clarification Query", tag: "technical_clarifications" },
-    { key: "gov_dept_name", label: "Government Dept Name", tag: "government_departments" },
-    { key: "section_name", label: "Section Name", tag: "sections" },
-    { key: "division_name", label: "Division Name", tag: "divisions" },
-    { key: "sub_division_name", label: "Sub Division Name", tag: "sub_divisions" },
-    { key: "reference_code", label: "Reference Code", tag: "reference_codes" }
-  ];
-
-  const selectedResourceFields = fieldsAccessList.filter(
-    (field) => field.tag === selectedResourceKey
-  );
-
   // Standard PRBAC permission helpers
   const permissionRoles = useMemo(() => {
     const dbRoles = store.roles || [];
@@ -864,7 +732,6 @@ export function SettingsPage() {
 
   const initializePermissionState = (source: {
     pageAccess?: string[];
-    fieldPermissions?: Record<string, any>;
     actionPermissions?: StoredActionPermissions;
   }) => {
     const pageObj: Record<string, boolean> = {};
@@ -872,15 +739,6 @@ export function SettingsPage() {
       pageObj[module.key] = source.pageAccess?.includes(module.key) ?? false;
     });
     setPageAccessState(pageObj);
-
-    const fieldObj: Record<string, { view: boolean; edit: boolean }> = {};
-    fieldsAccessList.forEach((field) => {
-      fieldObj[field.key] = source.fieldPermissions?.[field.key] ?? {
-        view: true,
-        edit: true,
-      };
-    });
-    setFieldPermsState(fieldObj);
 
     setActionPermsState(
       normalizePageActionPermissions(
@@ -951,21 +809,12 @@ export function SettingsPage() {
 
   const applyPreset = (preset: "full" | "viewer" | "none") => {
     const pageObj: Record<string, boolean> = {};
-    const fieldObj: Record<string, { view: boolean; edit: boolean }> = {};
 
     modulesList.forEach((module) => {
       pageObj[module.key] = preset === "full" || preset === "viewer";
     });
 
-    fieldsAccessList.forEach((field) => {
-      fieldObj[field.key] = {
-        view: preset === "full" || preset === "viewer",
-        edit: preset === "full",
-      };
-    });
-
     setPageAccessState(pageObj);
-    setFieldPermsState(fieldObj);
     setActionPermsState(
       Object.fromEntries(
         modulesList.map((module) => [
@@ -988,17 +837,6 @@ export function SettingsPage() {
         (key) => pageAccessState[key],
       );
 
-      // A field cannot be editable if its resource-level Update action is disabled.
-      const finalFieldPerms = { ...fieldPermsState };
-      fieldsAccessList.forEach((field) => {
-        if (!actionPermsState[field.tag]?.edit) {
-          finalFieldPerms[field.key] = {
-            ...finalFieldPerms[field.key],
-            edit: false,
-          };
-        }
-      });
-
       // Role mode is the standard PRBAC path: the role owns the permission set.
       // Until a dedicated role-permission endpoint exists, the existing user update
       // endpoint is used to keep every user in that role synchronized.
@@ -1009,7 +847,6 @@ export function SettingsPage() {
 
       const permissionPayload = {
         pageAccess,
-        fieldPermissions: finalFieldPerms,
         actionPermissions: actionPermsState,
       };
 
@@ -1069,7 +906,6 @@ export function SettingsPage() {
           ? {
               ...user,
               pageAccess,
-              fieldPermissions: finalFieldPerms,
               actionPermissions: actionPermsState,
               hasOverride:
                 permissionMode === "role" ? false : user.hasOverride,
@@ -1085,7 +921,6 @@ export function SettingsPage() {
           ? {
               ...user,
               pageAccess,
-              fieldPermissions: finalFieldPerms,
               actionPermissions: actionPermsState,
               hasOverride:
                 permissionMode === "role" ? false : user.hasOverride,
@@ -4828,114 +4663,6 @@ export function SettingsPage() {
                       })}
                     </div>
 
-                  </section>
-
-                  {/* Field-level permissions */}
-                  <section className="rounded-2xl border border-border bg-card overflow-hidden">
-                    <div className="border-b border-border px-5 py-4">
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                            Field permissions
-                          </div>
-                          <h3 className="mt-1 text-sm font-bold text-foreground">
-                            Visibility and edit policy
-                          </h3>
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            Control which fields users can see and modify for the selected resource.
-                          </p>
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">
-                          View → Edit hierarchy enforced
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="max-h-[430px] overflow-y-auto">
-                      <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_80px_80px] border-b border-border bg-muted/90 backdrop-blur px-5 py-2.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                        <div>Field</div>
-                        <div className="text-center">View</div>
-                        <div className="text-center">Edit</div>
-                      </div>
-
-                      {fieldsAccessList
-                        .filter((field) => field.tag === selectedActionModule)
-                        .map((field) => {
-                          const current = fieldPermsState[field.key] ?? {
-                            view: true,
-                            edit: true,
-                          };
-                          const resourceCanEdit = Boolean(
-                            actionPermsState[selectedActionModule]?.edit,
-                          );
-
-                          return (
-                            <div
-                              key={field.key}
-                              className="grid grid-cols-[minmax(0,1fr)_80px_80px] items-center border-b border-border/70 px-5 py-3 hover:bg-muted/30 transition"
-                            >
-                              <div className="min-w-0">
-                                <div className="text-xs font-semibold text-foreground truncate">
-                                  {field.label}
-                                </div>
-                                <div className="mt-0.5 text-[9px] text-muted-foreground">
-                                  {field.key}
-                                </div>
-                              </div>
-                              <div className="flex justify-center">
-                                <input
-                                  type="checkbox"
-                                  checked={current.view}
-                                  onChange={(e) =>
-                                    setFieldPermsState({
-                                      ...fieldPermsState,
-                                      [field.key]: {
-                                        ...current,
-                                        view: e.target.checked,
-                                        edit: e.target.checked ? current.edit : false,
-                                      },
-                                    })
-                                  }
-                                  className="h-4 w-4 accent-primary"
-                                />
-                              </div>
-                              <div className="flex justify-center">
-                                <input
-                                  type="checkbox"
-                                  checked={resourceCanEdit && current.view && current.edit}
-                                  disabled={!resourceCanEdit || !current.view}
-                                  onChange={(e) =>
-                                    setFieldPermsState({
-                                      ...fieldPermsState,
-                                      [field.key]: {
-                                        ...current,
-                                        edit: e.target.checked,
-                                      },
-                                    })
-                                  }
-                                  className={`h-4 w-4 accent-primary ${
-                                    !resourceCanEdit || !current.view
-                                      ? "opacity-40 cursor-not-allowed"
-                                      : ""
-                                  }`}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                      {fieldsAccessList.filter((field) => field.tag === selectedActionModule).length === 0 && (
-                        <div className="px-5 py-12 text-center">
-                          <div className="text-2xl">🔒</div>
-                          <div className="mt-2 text-sm font-semibold text-foreground">
-                            No fields available
-                          </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            This resource has no field definitions in the permission registry.
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </section>
                 </div>
               </main>

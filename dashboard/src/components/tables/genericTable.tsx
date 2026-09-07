@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useERPStore } from "@/store/erpStore";
-import { isAdminUser } from "@/utils/pagePermissions";
 import { cn } from "@/utils/helpers";
 import {
   DndContext,
@@ -277,86 +276,6 @@ export function GenericTable<TData extends { id: string }>({
   }, [localStorageVisibilityKey]);
 
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
-  const store = useERPStore();
-
-  // Helper to determine if a field is visible based on user permissions
-  const isFieldVisible = React.useCallback((columnId: string) => {
-    if (!store.currentUserId) return true;
-    const currentUser = store.users.find(u => u.id === store.currentUserId) as any;
-    if (!currentUser) return true;
-
-    const isAdmin = isAdminUser(currentUser);
-    if (isAdmin) return true;
-
-    if (!currentUser.fieldPermissions) return true;
-
-    // Normalize input column ID to lowercase alphanumeric only (e.g., "basicSalary" -> "basicsalary", "po_number" -> "ponumber")
-    const cleanColId = columnId.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    // List of restricted fields from fieldsAccessList
-    // We map clean substrings of column IDs to the exact permission keys
-    const patterns: Array<{ sub: string; permKey: string }> = [
-      { sub: 'taxid', permKey: 'company_tax_id' },
-      { sub: 'gst', permKey: 'company_tax_id' },
-      { sub: 'pan', permKey: 'pan_no' },
-      { sub: 'aadhaar', permKey: 'aadhaar_no' },
-      { sub: 'registration', permKey: 'registration_number' },
-      { sub: 'budget', permKey: 'budget_limit' },
-      { sub: 'allocated', permKey: 'allocated_amount' },
-      { sub: 'advance', permKey: 'advance_amount' },
-      { sub: 'balance', permKey: 'balance_due' },
-      { sub: 'bankname', permKey: 'bank_name' },
-      { sub: 'bankaccount', permKey: 'bank_account_no' },
-      { sub: 'accno', permKey: 'bank_account_no' },
-      { sub: 'accountno', permKey: 'bank_account_no' },
-      { sub: 'ifsc', permKey: 'ifsc_code' },
-      { sub: 'discount', permKey: 'discount_margin' },
-      { sub: 'markup', permKey: 'markup_percent' },
-      { sub: 'empcode', permKey: 'employee_code' },
-      { sub: 'employeecode', permKey: 'employee_code' },
-      { sub: 'basicsalary', permKey: 'basic_salary' },
-      { sub: 'salary', permKey: 'basic_salary' },
-      { sub: 'hra', permKey: 'hra_allowance' },
-      { sub: 'ctc', permKey: 'total_ctc' },
-      { sub: 'pf', permKey: 'pf_uan' },
-      { sub: 'uan', permKey: 'pf_uan' },
-      { sub: 'dob', permKey: 'date_of_birth' },
-      { sub: 'birth', permKey: 'date_of_birth' },
-      { sub: 'credit', permKey: 'credit_limit' },
-      { sub: 'paymentterm', permKey: 'payment_terms' },
-      { sub: 'password', permKey: 'password_hash' },
-      { sub: 'systemrole', permKey: 'is_system_role' },
-      { sub: 'ponumber', permKey: 'po_number' },
-      { sub: 'povalue', permKey: 'po_value' },
-      { sub: 'pototal', permKey: 'po_value' },
-      { sub: 'deliverytarget', permKey: 'delivery_month_target' },
-      { sub: 'concerned', permKey: 'concerned_person' },
-      { sub: 'drawing', permKey: 'drawing_status' },
-      { sub: 'material', permKey: 'material_status' },
-      { sub: 'plant', permKey: 'plant_status' },
-      { sub: 'dispatch', permKey: 'dispatch_date' },
-    ];
-
-    // Find if the clean column ID matches or contains any of the substrings
-    const match = patterns.find(p => cleanColId.includes(p.sub));
-    if (match) {
-      const perm = currentUser.fieldPermissions[match.permKey];
-      return perm?.view !== false;
-    }
-
-    // Default fallback to direct key matching
-    const matchingKey = Object.keys(currentUser.fieldPermissions).find(k => {
-      const normalizedKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return normalizedKey === cleanColId || cleanColId.includes(normalizedKey);
-    });
-
-    if (matchingKey) {
-      const perm = currentUser.fieldPermissions[matchingKey];
-      return perm?.view !== false;
-    }
-
-    return true;
-  }, [store.users, store.currentUserId]);
 
   const t = (key: string) => {
     return key;
@@ -365,9 +284,7 @@ export function GenericTable<TData extends { id: string }>({
   // Append selection checkbox column if bulk actions exist
   const tableColumns = React.useMemo(() => {
     const visibleCols = columns.filter((col: any) => {
-      const colId = col.id ?? col.accessorKey;
-      if (!colId) return true;
-      return isFieldVisible(colId);
+      return true;
     });
 
     const cols = visibleCols.map((col) => {
