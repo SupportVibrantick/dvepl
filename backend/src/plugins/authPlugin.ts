@@ -58,7 +58,9 @@ const moduleFromDynamicUrl = (url: string): string | null => {
   if (queryMatch) return decodeURIComponent(queryMatch[1]);
 
   const pathMatch = url.match(/\/dynamic\/(?:record\/import|schema|record|module)\/([^/?#]+)/);
-  if (pathMatch && pathMatch[1] !== "id") return decodeURIComponent(pathMatch[1]);
+  if (pathMatch && pathMatch[1] !== "id" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pathMatch[1])) {
+    return decodeURIComponent(pathMatch[1]);
+  }
 
   return null;
 };
