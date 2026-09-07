@@ -362,9 +362,14 @@ async function adminRoutes(
         }
       }
 
-      // If we identified specific required permissions, authorize them
+      // If we identified specific required permissions, authorize them.
+      // authorizePermissions sends a 403 reply when access is denied; stopping
+      // here prevents the route handler from replying a second time.
       if (requiredPermissions.length > 0) {
-        await instance.authorizePermissions(requiredPermissions)(req, reply);
+        await instance.authorizePermissions(
+          requiredPermissions,
+        )(req, reply);
+        if (reply.sent) return;
       }
     });
 
