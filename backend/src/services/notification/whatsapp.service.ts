@@ -14,6 +14,10 @@ export interface SendWhatsAppOptions {
   campaignName: string;
   templateParams?: string[];
   source?: string;
+  media?: {
+    url: string;
+    filename: string;
+  };
 }
 
 export class WhatsappService {
@@ -65,14 +69,26 @@ export class WhatsappService {
     let status: "SENT" | "FAILED" = "SENT";
     let errorMsg: string | null = null;
 
-    const payload = {
+    // Clean and normalize phone number with international country code
+    let cleanDigits = options.to.replace(/[^\d]/g, "");
+    let destination = options.to.trim();
+    if (cleanDigits.length === 10) {
+      destination = `+91${cleanDigits}`;
+    } else if (!destination.startsWith("+")) {
+      destination = `+${cleanDigits}`;
+    }
+
+    const payload: any = {
       apiKey: apiKey.trim(),
       campaignName,
-      destination: options.to.trim(),
+      destination,
       userName: options.userName,
       source: options.source || "DVEPL_CRM",
       ...(options.templateParams && options.templateParams.length > 0
         ? { templateParams: options.templateParams }
+        : {}),
+      ...(options.media?.url
+        ? { media: { url: options.media.url, filename: options.media.filename } }
         : {}),
     };
 
@@ -80,7 +96,7 @@ export class WhatsappService {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-      const response = await fetch(
+      let response = await fetch(
         `${AISENSY_API_BASE}${AISENSY_SEND_ENDPOINT}`,
         {
           method: "POST",
@@ -92,15 +108,121 @@ export class WhatsappService {
 
       clearTimeout(timeout);
 
+      // If campaign is stopped / not live or params mismatched, fall back to active default campaign
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(
-          `AiSensy API returned ${response.status}: ${body}`
-        );
+        const errorBody = await response.text();
+        adminLogs.warn("AiSensy primary dispatch error, evaluating fallback", {
+          status: response.status,
+          errorBody,
+          campaignName,
+        });
+
+        // 1. If template params mismatched, attempt with progressive params
+        if (
+          response.status === 400 &&
+          (errorBody.includes("Template params") || errorBody.includes("templateParams"))
+        ) {
+          const fallbackParamsList = [
+            [options.userName || "Customer"],
+            [],
+          ];
+
+          let succeeded = false;
+          for (const fallbackParams of fallbackParamsList) {
+            const retryController = new AbortController();
+            const retryTimeout = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT_MS);
+            const retryResp = await fetch(
+              `${AISENSY_API_BASE}${AISENSY_SEND_ENDPOINT}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...payload,
+                  templateParams: fallbackParams,
+                }),
+                signal: retryController.signal,
+              }
+            );
+            clearTimeout(retryTimeout);
+            if (retryResp.ok) {
+              succeeded = true;
+              break;
+            }
+          }
+
+          if (!succeeded) {
+            // Fall back to default campaign
+            if (config.whatsappCampaignName && campaignName !== config.whatsappCampaignName) {
+              const defController = new AbortController();
+              const defTimeout = setTimeout(() => defController.abort(), REQUEST_TIMEOUT_MS);
+              const defResp = await fetch(
+                `${AISENSY_API_BASE}${AISENSY_SEND_ENDPOINT}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    apiKey: apiKey.trim(),
+                    campaignName: config.whatsappCampaignName.trim(),
+                    destination,
+                    userName: options.userName,
+                    source: "DVEPL_FALLBACK",
+                    templateParams: [options.userName || "Partner"],
+                  }),
+                  signal: defController.signal,
+                }
+              );
+              clearTimeout(defTimeout);
+              if (defResp.ok) {
+                succeeded = true;
+              }
+            }
+          }
+
+          if (!succeeded) {
+            throw new Error(`AiSensy API returned ${response.status}: ${errorBody}`);
+          }
+        }
+        // 2. If campaign is STOPPED / Not Live or does not exist, fall back to default live campaign
+        else if (
+          (response.status === 406 || response.status === 400) &&
+          (errorBody.includes("Not Live") || errorBody.includes("does not exist") || errorBody.includes("STOPPED"))
+        ) {
+          const fallbackCampaign = (config.whatsappCampaignName || "dvepl_reply_1").trim();
+          if (fallbackCampaign && campaignName !== fallbackCampaign) {
+            adminLogs.info(`Campaign '${campaignName}' is inactive. Falling back to default '${fallbackCampaign}'`);
+            const fbController = new AbortController();
+            const fbTimeout = setTimeout(() => fbController.abort(), REQUEST_TIMEOUT_MS);
+            const fbResp = await fetch(
+              `${AISENSY_API_BASE}${AISENSY_SEND_ENDPOINT}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  apiKey: apiKey.trim(),
+                  campaignName: fallbackCampaign,
+                  destination,
+                  userName: options.userName,
+                  source: "DVEPL_CAMPAIGN_FALLBACK",
+                  templateParams: [options.userName || "Partner"],
+                }),
+                signal: fbController.signal,
+              }
+            );
+            clearTimeout(fbTimeout);
+            if (!fbResp.ok) {
+              const fbErr = await fbResp.text();
+              throw new Error(`AiSensy fallback failed: ${fbErr}`);
+            }
+          } else {
+            throw new Error(`AiSensy API returned ${response.status}: ${errorBody}`);
+          }
+        } else {
+          throw new Error(`AiSensy API returned ${response.status}: ${errorBody}`);
+        }
       }
 
       adminLogs.info("WhatsApp message sent via AiSensy", {
-        destination: options.to,
+        destination,
         campaignName,
         companyId,
       });

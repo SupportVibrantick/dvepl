@@ -177,13 +177,17 @@ export class NotificationService {
       userName: string;
       campaignName?: string;
       templateParams?: string[];
+      media?: {
+        url: string;
+        filename: string;
+      };
       eventCode?: string;
       relatedModule?: string;
       relatedRecordId?: string;
     },
     companyId?: string,
   ) {
-    const { to, userName, campaignName, templateParams, eventCode, relatedModule, relatedRecordId } = options;
+    const { to, userName, campaignName, templateParams, media, eventCode, relatedModule, relatedRecordId } = options;
 
     return WhatsappService.send(
       {
@@ -191,6 +195,7 @@ export class NotificationService {
         userName,
         campaignName: campaignName || "",
         templateParams,
+        media,
         source: "DVEPL_CRM",
       },
       companyId,

@@ -20,7 +20,8 @@ import {
   MailCheck,
   MailX,
   Circle,
-  Edit3
+  Edit3,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,9 @@ export const apiService = {
     },
     sendReminders: async (): Promise<any> => {
       return hrmsApi.tasks.sendReminders();
+    },
+    sendWhatsAppReminder: async (id: string): Promise<any> => {
+      return hrmsApi.tasks.sendWhatsAppReminder(id);
     }
   },
   employees: {
@@ -309,6 +313,21 @@ export default function TasksPage() {
       toast.error(err.response?.data?.message || "Failed to trigger overdue reminders.");
     } finally {
       setIsSendingReminders(false);
+    }
+  };
+
+  const handleSendWhatsAppReminder = async (task: Task) => {
+    const toastId = toast.loading(`Sending WhatsApp reminder for "${task.title}"...`);
+    try {
+      const res = await apiService.tasks.sendWhatsAppReminder(task.id);
+      if (res.success === false) {
+        toast.error(res.message || "Failed to send WhatsApp reminder.", { id: toastId });
+      } else {
+        toast.success(res.message || "WhatsApp reminder sent!", { id: toastId });
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to send WhatsApp reminder.", { id: toastId });
     }
   };
 
@@ -833,6 +852,17 @@ export default function TasksPage() {
                               title="Notification Settings"
                             >
                               <Bell className="size-3.5" />
+                            </Button>
+                          )}
+                          {canManage && task.status !== "completed" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-slate-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"
+                              onClick={() => handleSendWhatsAppReminder(task)}
+                              title="Send WhatsApp Reminder to assigned users"
+                            >
+                              <MessageSquare className="size-3.5" />
                             </Button>
                           )}
                           {canDelete && (

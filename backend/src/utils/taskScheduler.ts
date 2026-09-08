@@ -1,6 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import NotificationService from "../services/notification/notification.service";
 
+function buildTaskReminderWaMessage(taskTitle: string, dueDate: Date, priority: string, status: string): string {
+  const dueDateStr = new Date(dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return `📋 *Task Reminder*\n\nHi, you have a task that needs your attention:\n\n*Task:* ${taskTitle}\n*Due Date:* ${dueDateStr}\n*Priority:* ${priority.toUpperCase()}\n*Status:* ${status.replace("-", " ").toUpperCase()}\n\nPlease review and update the task status accordingly.\n\n- DVEPL ERP`;
+}
+
 export async function checkAndSendTaskReminders(prisma: PrismaClient) {
   try {
     const today = new Date();
@@ -79,6 +84,7 @@ export async function checkAndSendTaskReminders(prisma: PrismaClient) {
         }
 
         if (shouldSend) {
+          // ── Email reminder ──────────────────────────────────────────────
           try {
             await NotificationService.sendCustomNotification({
               to: user.email,
@@ -88,9 +94,30 @@ export async function checkAndSendTaskReminders(prisma: PrismaClient) {
               relatedModule: "TASK",
               relatedRecordId: task.id,
             }, companyId);
-            console.log(`[Scheduler] Sent task reminder for "${task.title}" to ${user.email}`);
+            console.log(`[Scheduler] Sent task reminder email for "${task.title}" to ${user.email}`);
           } catch (sendError) {
-            console.error(`[Scheduler] Failed to send task reminder for "${task.title}" to ${user.email}:`, sendError);
+            console.error(`[Scheduler] Failed to send task reminder email for "${task.title}" to ${user.email}:`, sendError);
+          }
+
+          // ── WhatsApp reminder (if phone available) ──────────────────────
+          if (user.phone) {
+            try {
+              await NotificationService.sendWhatsAppNotification({
+                to: user.phone,
+                userName: user.name || "User",
+                campaignName: "dvepl_reply_1",
+                templateParams: [
+                  user.name || "User",
+                  buildTaskReminderWaMessage(task.title, task.dueDate, task.priority, task.status),
+                ],
+                eventCode: "TASK_REMINDER_WA",
+                relatedModule: "TASK",
+                relatedRecordId: task.id,
+              }, companyId);
+              console.log(`[Scheduler] Sent task reminder WhatsApp for "${task.title}" to ${user.phone}`);
+            } catch (waError) {
+              console.error(`[Scheduler] Failed to send task reminder WhatsApp for "${task.title}" to ${user.phone}:`, waError);
+            }
           }
         }
       }

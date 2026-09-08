@@ -5,6 +5,7 @@ import testSmtpRoute from "./test-smtp";
 import sendTestEmailRoute from "./send-test-email";
 import sendPoEmailRoute from "./send-po-email";
 import sendVendorFollowUpEmailRoute from "./send-vendor-follow-up-email";
+import sendPoWhatsappRoute from "./send-po-whatsapp";
 import testWhatsappRoute from "./test-whatsapp";
 import backupRestoreRoutes from "./backup";
 
@@ -17,6 +18,7 @@ async function adminSettingsRouteGroup(
   fastify.register(testSmtpRoute, { prefix: "/" });
   fastify.register(sendTestEmailRoute, { prefix: "/" });
   fastify.register(sendPoEmailRoute, { prefix: "/" });
+  fastify.register(sendPoWhatsappRoute, { prefix: "/" });
   fastify.register(sendVendorFollowUpEmailRoute, { prefix: "/" });
   fastify.register(testWhatsappRoute, { prefix: "/" });
   fastify.register(backupRestoreRoutes, { prefix: "/" });

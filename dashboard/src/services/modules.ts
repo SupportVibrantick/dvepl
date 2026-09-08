@@ -55,7 +55,8 @@ export const hrmsApi = {
   tasks: {
     ...crud((API_ENDPOINTS.hrms as any).tasks, { updateMethod: 'patch' }),
     updateNotification: (id: string, data: any) => apiClient.patch(`/task/notification/settings/${id}`, data).then(res => res.data),
-    sendReminders: () => apiClient.post("/task/notification/send-reminders").then(res => res.data)
+    sendReminders: () => apiClient.post("/task/notification/send-reminders").then(res => res.data),
+    sendWhatsAppReminder: (id: string) => apiClient.post(`/task/notification/send-whatsapp/${id}`).then(res => res.data),
   }
 };
 
@@ -171,6 +172,7 @@ export const securityApi = {
     testSmtp: (data: any) => apiClient.post((API_ENDPOINTS.security.settings as any).testSmtp, data).then(res => res.data),
     sendTestEmail: (data: any) => apiClient.post((API_ENDPOINTS.security.settings as any).sendTestEmail, data).then(res => res.data),
     sendPoEmail: (data: any) => apiClient.post((API_ENDPOINTS.security.settings as any).sendPoEmail, data).then(res => res.data),
+    sendPoWhatsapp: (data: any) => apiClient.post((API_ENDPOINTS.security.settings as any).sendPoWhatsapp, data).then(res => res.data),
     testWhatsapp: (data: any) => apiClient.post((API_ENDPOINTS.security.settings as any).testWhatsapp, data).then(res => res.data),
     exportBackup: () => apiClient.get((API_ENDPOINTS.security.settings as any).exportBackup).then(res => res.data.data),
     importBackup: (data: any) => apiClient.post((API_ENDPOINTS.security.settings as any).importBackup, data).then(res => res.data),

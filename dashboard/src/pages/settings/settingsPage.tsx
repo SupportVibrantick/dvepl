@@ -119,6 +119,9 @@ const defaultGatewaySettings = {
   baseUrl: "",
   apiKey: "",
   campaignName: "",
+  poCampaign: "Payment",
+  paymentCampaign: "Payments",
+  drawingCampaign: "Drawing Status",
   number: "",
   secretKey: "",
   enabled: false,
@@ -1443,6 +1446,9 @@ export function SettingsPage() {
       provider: "aisensy",
       apiKey: (gatewaySettings.apiKey || "").trim(),
       campaignName: (gatewaySettings.campaignName || "").trim(),
+      poCampaign: (gatewaySettings.poCampaign || "Payment").trim(),
+      paymentCampaign: (gatewaySettings.paymentCampaign || "Payments").trim(),
+      drawingCampaign: (gatewaySettings.drawingCampaign || "Drawing Status").trim(),
       number: (gatewaySettings.number || "").trim(),
       instanceId: gatewaySettings.baseUrl,
     };
@@ -3496,13 +3502,30 @@ export function SettingsPage() {
                         </td>
                       </tr>
                       <tr className="hover:bg-muted/5">
-                        <td className="p-3 font-semibold">Campaign Name</td>
+                        <td className="p-3 font-semibold">Default Campaign</td>
                         <td className="p-3 text-foreground">
                           {gatewaySettings.campaignName || (
                             <span className="text-muted-foreground italic">
                               Not set
                             </span>
                           )}
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-muted/5">
+                        <td className="p-3 font-semibold">Module Campaigns</td>
+                        <td className="p-3 text-foreground space-y-1">
+                          <div className="flex gap-2 items-center">
+                            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-bold">PO:</span>
+                            <span>{gatewaySettings.poCampaign || "Payment"}</span>
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-bold">Payments:</span>
+                            <span>{gatewaySettings.paymentCampaign || "Payments"}</span>
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-bold">Drawing:</span>
+                            <span>{gatewaySettings.drawingCampaign || "Drawing Status"}</span>
+                          </div>
                         </td>
                       </tr>
                       <tr className="hover:bg-muted/5">
@@ -3598,7 +3621,7 @@ export function SettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                        Campaign Name <span className="normal-case font-normal text-muted-foreground/70">(Optional)</span>
+                        Default Campaign Name <span className="normal-case font-normal text-muted-foreground/70">(Fallback, e.g. dvepl_reply_1)</span>
                       </label>
                       <input
                         type="text"
@@ -3611,10 +3634,73 @@ export function SettingsPage() {
                             campaignName: e.target.value,
                           })
                         }
-                        placeholder="e.g. order_notification (optional)"
+                        placeholder="e.g. dvepl_reply_1"
                         className="w-full px-3 py-1.5 text-xs border border-border bg-card rounded-lg outline-none focus:border-primary"
                       />
                     </div>
+
+                    <div className="pt-2 border-t border-border/60">
+                      <p className="text-[11px] font-bold text-foreground mb-2 flex items-center gap-1.5">
+                        <span>🎯</span> AiSensy Module Campaigns
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            Purchase Order Campaign
+                          </label>
+                          <input
+                            type="text"
+                            value={gatewaySettings.poCampaign || ""}
+                            onChange={(e) =>
+                              setGatewaySettings({
+                                ...gatewaySettings,
+                                poCampaign: e.target.value,
+                              })
+                            }
+                            placeholder="e.g. Payment or PO Follow-up"
+                            className="w-full px-3 py-1.5 text-xs border border-border bg-card rounded-lg outline-none focus:border-primary"
+                          />
+                          <p className="text-[9px] text-muted-foreground">Template: Vendor, PO No, Date</p>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            Payment Reminder Campaign
+                          </label>
+                          <input
+                            type="text"
+                            value={gatewaySettings.paymentCampaign || ""}
+                            onChange={(e) =>
+                              setGatewaySettings({
+                                ...gatewaySettings,
+                                paymentCampaign: e.target.value,
+                              })
+                            }
+                            placeholder="e.g. Payments"
+                            className="w-full px-3 py-1.5 text-xs border border-border bg-card rounded-lg outline-none focus:border-primary"
+                          />
+                          <p className="text-[9px] text-muted-foreground">Template: Name, Due Amount, Mobile</p>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            Drawing Status Campaign
+                          </label>
+                          <input
+                            type="text"
+                            value={gatewaySettings.drawingCampaign || ""}
+                            onChange={(e) =>
+                              setGatewaySettings({
+                                ...gatewaySettings,
+                                drawingCampaign: e.target.value,
+                              })
+                            }
+                            placeholder="e.g. Drawing Status"
+                            className="w-full px-3 py-1.5 text-xs border border-border bg-card rounded-lg outline-none focus:border-primary"
+                          />
+                          <p className="text-[9px] text-muted-foreground">Template: Email, Delivery Period</p>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                         WhatsApp Business Number

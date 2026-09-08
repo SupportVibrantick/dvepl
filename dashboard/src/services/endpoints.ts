@@ -263,6 +263,7 @@ export const API_ENDPOINTS = {
       testSmtp: '/settings/test-smtp',
       sendTestEmail: '/settings/send-test-email',
       sendPoEmail: '/settings/send-po-email',
+      sendPoWhatsapp: '/settings/send-po-whatsapp',
       testWhatsapp: '/settings/test-whatsapp/',
       exportBackup: '/settings/backup/export',
       importBackup: '/settings/backup/import',

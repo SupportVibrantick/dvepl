@@ -9,6 +9,12 @@ import { taskNotificationSchema } from "../../../schemas/admin/task/task.schema"
 import NotificationService from "../../../services/notification/notification.service";
 import { canManageTask, isAdminUser, getEmployeeForUser } from "./access";
 
+/** Build a task reminder WhatsApp message text for dvepl_reply_1 campaign */
+function buildTaskReminderWaMessage(taskTitle: string, dueDate: Date, priority: string, status: string): string {
+  const dueDateStr = new Date(dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return `📋 *Task Reminder*\n\nHi, you have a task that needs your attention:\n\n*Task:* ${taskTitle}\n*Due Date:* ${dueDateStr}\n*Priority:* ${priority.toUpperCase()}\n*Status:* ${status.replace("-", " ").toUpperCase()}\n\nPlease review and update the task status accordingly.\n\n- DVEPL ERP`;
+}
+
 async function adminTaskNotificationRoutes(
   fastify: FastifyInstance,
   options: FastifyPluginOptions,
@@ -158,6 +164,7 @@ async function adminTaskNotificationRoutes(
             .filter((u: any) => u && u.email);
 
           for (const user of assignedUsers) {
+            // ── Email reminder ───────────────────────────────────────────────
             try {
               await NotificationService.sendCustomNotification({
                 to: user.email,
@@ -171,7 +178,27 @@ async function adminTaskNotificationRoutes(
             } catch (err: any) {
               failCount++;
               lastErrorMsg = err?.message || String(err);
-              console.warn(`[SendReminders] Could not send reminder to ${user.email}:`, err?.message || err);
+              console.warn(`[SendReminders] Could not send email to ${user.email}:`, err?.message || err);
+            }
+
+            // ── WhatsApp reminder (if phone available) ───────────────────────
+            if (user.phone) {
+              try {
+                await NotificationService.sendWhatsAppNotification({
+                  to: user.phone,
+                  userName: user.name || "User",
+                  campaignName: "dvepl_reply_1",
+                  templateParams: [
+                    user.name || "User",
+                    buildTaskReminderWaMessage(task.title, task.dueDate, task.priority, task.status),
+                  ],
+                  eventCode: "TASK_REMINDER_WA",
+                  relatedModule: "TASK",
+                  relatedRecordId: task.id,
+                }, companyId);
+              } catch (waErr: any) {
+                console.warn(`[SendReminders] WhatsApp failed for ${user.phone}:`, waErr?.message || waErr);
+              }
             }
           }
         }
@@ -207,6 +234,103 @@ async function adminTaskNotificationRoutes(
           success: false,
           message: "Server error during reminder dispatch run.",
           error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        });
+      }
+    },
+  );
+
+  // ── Per-task WhatsApp Reminder ────────────────────────────────────────────
+  fastify.post(
+    "/send-whatsapp/:id",
+    {
+      schema: {
+        tags: ["Task"],
+        summary: "Send WhatsApp Reminder for Task",
+        description: "Sends a WhatsApp reminder message to all assigned users (who have a phone number) for a specific task.",
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { id } = request.params as any;
+        const companyId = (request.user as any)?.companyId || (request.admin as any)?.companyId;
+
+        const task = await fastify.prisma.task.findFirst({
+          where: { id, deletedAt: null },
+          include: {
+            assignments: {
+              include: {
+                employee: {
+                  include: { user: true },
+                },
+              },
+            },
+          },
+        });
+
+        if (!task) {
+          return reply.status(404).send({ success: false, message: "Task not found." });
+        }
+
+        const hasAccess = await canManageTask(fastify, id, request);
+        if (!hasAccess) {
+          return reply.status(403).send({ success: false, message: "Access denied: you are not assigned to this task." });
+        }
+
+        const usersWithPhone = task.assignments
+          .map((a: any) => a.employee?.user)
+          .filter((u: any) => u && u.phone);
+
+        if (usersWithPhone.length === 0) {
+          return reply.status(200).send({
+            success: false,
+            message: "No assigned users have a phone number configured. Please add phone numbers to their user profiles.",
+          });
+        }
+
+        let sentCount = 0;
+        let failCount = 0;
+
+        for (const user of usersWithPhone) {
+          try {
+            await NotificationService.sendWhatsAppNotification({
+              to: user.phone,
+              userName: user.name || "User",
+              campaignName: "dvepl_reply_1",
+              templateParams: [
+                user.name || "User",
+                buildTaskReminderWaMessage(task.title, task.dueDate, task.priority, task.status),
+              ],
+              eventCode: "TASK_REMINDER_WA",
+              relatedModule: "TASK",
+              relatedRecordId: task.id,
+            }, companyId);
+            sentCount++;
+          } catch (err: any) {
+            failCount++;
+            console.warn(`[TaskWA] Failed to send WhatsApp to ${user.phone}:`, err?.message || err);
+          }
+        }
+
+        adminLogs.info("Per-task WhatsApp reminder dispatched", { taskId: id, sentCount, failCount });
+
+        if (sentCount === 0) {
+          return reply.status(200).send({
+            success: false,
+            message: `WhatsApp reminder failed for all ${failCount} recipient(s). Check gateway settings.`,
+          });
+        }
+
+        return reply.status(200).send({
+          success: true,
+          message: `WhatsApp reminder sent to ${sentCount} recipient(s)${failCount > 0 ? ` (${failCount} failed)` : ""}.`,
+          data: { sentCount, failCount },
+        });
+      } catch (error: any) {
+        console.error(error);
+        adminLogs.error("Per-task WhatsApp reminder failed", { error });
+        return reply.status(200).send({
+          success: false,
+          message: error.message || "Failed to send WhatsApp reminder.",
         });
       }
     },

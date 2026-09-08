@@ -19,6 +19,9 @@ import {
   FileSpreadsheet,
   Printer,
   History,
+  MessageSquare,
+  Send,
+  CheckCircle2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1085,10 +1088,35 @@ export function PurchaseOrdersPage() {
     if (!placeSendWhatsapp && !placeSendEmail) { toast.error("Select at least one channel."); return; }
     if (placeSendWhatsapp && !placePhone.trim()) { toast.error("Enter a WhatsApp number."); return; }
     if (placeSendEmail && !activePoVendor?.email?.trim()) { toast.error("Add an email to the vendor."); return; }
-    triggerExport("pdf");
     const message = buildPoMessageText();
     const sentChannels: string[] = [];
-    if (placeSendWhatsapp) { const cleanPhone = placePhone.replace(/[^\d]/g, ""); window.open("https://wa.me/" + cleanPhone + "?text=" + encodeURIComponent(message), "_blank"); sentChannels.push("WhatsApp"); }
+
+    if (placeSendWhatsapp) {
+      const waToast = toast.loading("Dispatching PO via WhatsApp...");
+      const itemsLine = poItems.length === 1 ? (poItems[0]?.description || "1 item") : `${poItems.length} items`;
+      try {
+        const res = await securityApi.settings.sendPoWhatsapp({
+          vendorId: activePoVendor.id,
+          poNumber,
+          phone: placePhone.trim(),
+          vendorName: activePoVendor.name,
+          grandTotal: `Rs. ${totals.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+          itemsSummary: itemsLine,
+          messageText: message,
+        });
+
+        if (res?.success) {
+          sentChannels.push("WhatsApp");
+          toast.success("PO dispatched via WhatsApp successfully!", { id: waToast });
+        } else {
+          toast.error(res?.message || "Failed to send WhatsApp message.", { id: waToast });
+        }
+      } catch (err: any) {
+        console.error("WhatsApp dispatch error:", err);
+        toast.error(err?.response?.data?.message || err?.message || "Failed to send WhatsApp. Check gateway settings.", { id: waToast });
+      }
+    }
+
     if (placeSendEmail) {
       const emailToast = toast.loading("Sending PO email...");
       const placedDoc = buildPoPdfDocument();
@@ -2055,23 +2083,161 @@ export function PurchaseOrdersPage() {
 
       {/* PO Placed Dialog */}
       <Dialog open={isPoPlacedDialogOpen} onOpenChange={setIsPoPlacedDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-primary">📨 Place PO — Send to Vendor</DialogTitle>
+        <DialogContent className="max-w-md p-6 rounded-2xl border border-border shadow-xl">
+          <DialogHeader className="space-y-1.5 pb-2 border-b border-border/60">
+            <div className="flex items-center gap-2.5">
+              <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Send className="size-4.5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Place & Dispatch PO
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  Send Purchase Order <span className="font-semibold text-foreground">{poNumber}</span> to {activePoVendor?.name || "Vendor"}
+                </p>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="space-y-4 pt-1">
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer"><Checkbox checked={placeSendWhatsapp} onCheckedChange={(v) => setPlaceSendWhatsapp(!!v)} /> Send via WhatsApp</label>
-              {placeSendWhatsapp && <Input placeholder="Vendor WhatsApp number (with country code)" value={placePhone} onChange={(e) => setPlacePhone(e.target.value)} className="ml-6 h-9 text-xs" />}
+
+          <div className="space-y-4 pt-3">
+            {/* WhatsApp Option Card */}
+            <div
+              onClick={() => setPlaceSendWhatsapp(!placeSendWhatsapp)}
+              className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                placeSendWhatsapp
+                  ? "border-emerald-500/50 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs"
+                  : "border-border bg-card/50 hover:border-border/80"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`size-8 rounded-lg flex items-center justify-center ${
+                    placeSendWhatsapp
+                      ? "bg-emerald-600 text-white"
+                      : "bg-muted text-muted-foreground"
+                  }`}>
+                    <MessageSquare className="size-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      Send via WhatsApp
+                      {placeSendWhatsapp && (
+                        <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded-md">
+                          AiSensy Auto-Dispatch
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Instant message notification with PO details
+                    </p>
+                  </div>
+                </div>
+                <Checkbox
+                  checked={placeSendWhatsapp}
+                  onCheckedChange={(v) => setPlaceSendWhatsapp(!!v)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                />
+              </div>
+
+              {placeSendWhatsapp && (
+                <div className="mt-3 pt-3 border-t border-emerald-200/50 dark:border-emerald-800/40" onClick={(e) => e.stopPropagation()}>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Vendor WhatsApp Number
+                  </label>
+                  <div className="relative">
+                    <Input
+                      placeholder="+919876543210 (include country code)"
+                      value={placePhone}
+                      onChange={(e) => setPlacePhone(e.target.value)}
+                      className="h-9 text-xs bg-background focus-visible:ring-emerald-500"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Format: Country code + 10-digit number (e.g. +91 7888625398)
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer"><Checkbox checked={placeSendEmail} onCheckedChange={(v) => setPlaceSendEmail(!!v)} /> Send via Email</label>
-              {placeSendEmail && <Input value={activePoVendor?.email || "No email address saved for this vendor"} readOnly className="ml-6 h-9 text-xs bg-muted" />}
+
+            {/* Email Option Card */}
+            <div
+              onClick={() => setPlaceSendEmail(!placeSendEmail)}
+              className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                placeSendEmail
+                  ? "border-primary/50 bg-primary/5 shadow-xs"
+                  : "border-border bg-card/50 hover:border-border/80"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`size-8 rounded-lg flex items-center justify-center ${
+                    placeSendEmail
+                      ? "bg-primary text-white"
+                      : "bg-muted text-muted-foreground"
+                  }`}>
+                    <Mail className="size-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-foreground">
+                      Send via Email
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Attach official PDF purchase order
+                    </p>
+                  </div>
+                </div>
+                <Checkbox
+                  checked={placeSendEmail}
+                  onCheckedChange={(v) => setPlaceSendEmail(!!v)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+
+              {placeSendEmail && (
+                <div className="mt-3 pt-3 border-t border-border/60" onClick={(e) => e.stopPropagation()}>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Vendor Email Address
+                  </label>
+                  <Input
+                    value={activePoVendor?.email || ""}
+                    placeholder="No email address saved for this vendor"
+                    readOnly
+                    className="h-9 text-xs bg-muted text-foreground/80 cursor-default"
+                  />
+                  {!activePoVendor?.email && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                      ⚠️ Please add an email to the vendor profile to send via email.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-            <p className="text-[11px] text-muted-foreground">This will generate the PDF purchase order for you to save or print.</p>
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <Button variant="outline" size="sm" onClick={() => setIsPoPlacedDialogOpen(false)}>Cancel</Button>
-              <Button size="sm" className="bg-primary text-white" onClick={handleConfirmPoPlaced}>Send PO</Button>
+
+            <div className="bg-muted/40 rounded-xl p-3 flex items-start gap-2 border border-border/40">
+              <span className="text-xs">💡</span>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Confirming will mark this PO status as <span className="font-semibold text-foreground">Placed</span> and generate an official PDF revision.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-border/60">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg h-9 px-4 text-xs font-medium"
+                onClick={() => setIsPoPlacedDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-primary text-white hover:bg-primary/95 rounded-lg h-9 px-5 text-xs font-bold shadow-sm flex items-center gap-1.5"
+                onClick={handleConfirmPoPlaced}
+              >
+                <Send className="size-3.5" /> Confirm & Send PO
+              </Button>
             </div>
           </div>
         </DialogContent>
