@@ -41,15 +41,27 @@ async function testWhatsappRoute(
           });
         }
 
-        if (!apiKey) {
-          return reply.status(400).send({
-            success: false,
-            message: "AiSensy API key is required.",
+        let effectiveApiKey = apiKey;
+        const isMaskedKey = !effectiveApiKey || effectiveApiKey.includes("****");
+
+        if (isMaskedKey) {
+          const companyId = request.user?.companyId;
+          const config = await fastify.prisma.notificationConfiguration.findFirst({
+            where: companyId ? { companyId } : {},
           });
+
+          if (!config?.whatsappApiKey) {
+            return reply.status(400).send({
+              success: false,
+              message: "AiSensy API key is required. Please enter a valid API key.",
+            });
+          }
+
+          effectiveApiKey = WhatsappService["decryptApiKey"](config.whatsappApiKey);
         }
 
         const result = await WhatsappService.verifyWithCredentials({
-          apiKey,
+          apiKey: effectiveApiKey,
           campaignName,
           number,
         });
@@ -62,9 +74,17 @@ async function testWhatsappRoute(
         adminLogs.error("WhatsApp Gateway connection failed", {
           error: error.message,
         });
-        return reply.status(500).send({
+
+        const rawMessage = error.message || "";
+        const isUnauthorized = rawMessage.includes("401") || rawMessage.toLowerCase().includes("unauthorized");
+        const statusCode = isUnauthorized ? 400 : 500;
+        const userMessage = isUnauthorized
+          ? "Invalid AiSensy API Key. Please verify your API key in AiSensy dashboard."
+          : (rawMessage || "Failed to connect to WhatsApp Gateway.");
+
+        return reply.status(statusCode).send({
           success: false,
-          message: error.message || "Failed to connect to WhatsApp Gateway.",
+          message: userMessage,
         });
       }
     }

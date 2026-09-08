@@ -450,8 +450,9 @@ export function SettingsPage() {
       const savedGateway = localStorage.getItem("dvepl_whatsapp_gateway");
       if (savedGateway) {
         const parsed = JSON.parse(savedGateway);
+        parsed.provider = "aisensy";
         setGatewaySettings(sanitizeObject(parsed, defaultGatewaySettings));
-        if (parsed.baseUrl) {
+        if (parsed.apiKey || parsed.campaignName || parsed.baseUrl) {
           setIsEditingGateway(false);
         } else {
           setIsEditingGateway(true);
@@ -554,6 +555,7 @@ export function SettingsPage() {
         if (settings.gatewaySettings) {
           const mappedGateway = {
             ...settings.gatewaySettings,
+            provider: "aisensy",
             baseUrl:
               settings.gatewaySettings.baseUrl ||
               settings.gatewaySettings.instanceId ||
@@ -562,7 +564,7 @@ export function SettingsPage() {
           setGatewaySettings(
             sanitizeObject(mappedGateway, defaultGatewaySettings),
           );
-          if (mappedGateway.baseUrl) {
+          if (mappedGateway.apiKey || mappedGateway.campaignName || mappedGateway.baseUrl) {
             setIsEditingGateway(false);
           } else {
             setIsEditingGateway(true);
@@ -1435,28 +1437,35 @@ export function SettingsPage() {
     toast.success("Captcha settings saved");
   };
 
-  const saveGatewaySettings = () => {
+  const saveGatewaySettings = async () => {
     const updatedGateway = {
       ...gatewaySettings,
-      provider: gatewaySettings.provider || "aisensy",
+      provider: "aisensy",
+      apiKey: (gatewaySettings.apiKey || "").trim(),
+      campaignName: (gatewaySettings.campaignName || "").trim(),
+      number: (gatewaySettings.number || "").trim(),
       instanceId: gatewaySettings.baseUrl,
     };
     localStorage.setItem(
       "dvepl_whatsapp_gateway",
       JSON.stringify(updatedGateway),
     );
-    updateStoreSettings({ gatewaySettings: updatedGateway });
-    toast.success("WhatsApp Gateway settings saved");
-    setIsEditingGateway(false);
+    const saved = await updateStoreSettings({ gatewaySettings: updatedGateway });
+    if (saved) {
+      toast.success("WhatsApp Gateway settings saved successfully");
+      setIsEditingGateway(false);
+    } else {
+      toast.error("Failed to save WhatsApp Gateway settings. Please try again.");
+    }
   };
 
   const testGateway = async () => {
     try {
       const promise = securityApi.settings.testWhatsapp({
-        provider: gatewaySettings.provider || "aisensy",
-        apiKey: gatewaySettings.apiKey,
-        campaignName: gatewaySettings.campaignName,
-        number: gatewaySettings.number,
+        provider: "aisensy",
+        apiKey: (gatewaySettings.apiKey || "").trim(),
+        campaignName: (gatewaySettings.campaignName || "").trim(),
+        number: (gatewaySettings.number || "").trim(),
       });
       await toast.promise(promise, {
         loading: "Connecting to AiSensy...",
@@ -3589,7 +3598,7 @@ export function SettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                        Campaign Name
+                        Campaign Name <span className="normal-case font-normal text-muted-foreground/70">(Optional)</span>
                       </label>
                       <input
                         type="text"
@@ -3602,7 +3611,7 @@ export function SettingsPage() {
                             campaignName: e.target.value,
                           })
                         }
-                        placeholder="e.g. order_notification"
+                        placeholder="e.g. order_notification (optional)"
                         className="w-full px-3 py-1.5 text-xs border border-border bg-card rounded-lg outline-none focus:border-primary"
                       />
                     </div>

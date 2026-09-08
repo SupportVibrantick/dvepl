@@ -38,14 +38,10 @@ export class WhatsappService {
       throw new Error("AiSensy API key is not configured.");
     }
 
-    if (!config.whatsappCampaignName) {
-      throw new Error("AiSensy campaign name is not configured.");
-    }
-
     return config;
   }
 
-  private static decryptApiKey(encryptedKey: string): string {
+  public static decryptApiKey(encryptedKey: string): string {
     try {
       return decrypt(encryptedKey);
     } catch {
@@ -64,15 +60,15 @@ export class WhatsappService {
     const config = await this.getConfiguration(companyId);
 
     const apiKey = this.decryptApiKey(config.whatsappApiKey!);
-    const campaignName = options.campaignName || config.whatsappCampaignName!;
+    const campaignName = (options.campaignName || config.whatsappCampaignName || "").trim();
 
     let status: "SENT" | "FAILED" = "SENT";
     let errorMsg: string | null = null;
 
     const payload = {
-      apiKey,
+      apiKey: apiKey.trim(),
       campaignName,
-      destination: options.to,
+      destination: options.to.trim(),
       userName: options.userName,
       source: options.source || "DVEPL_CRM",
       ...(options.templateParams && options.templateParams.length > 0
@@ -155,8 +151,8 @@ export class WhatsappService {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             apiKey,
-            campaignName: config.whatsappCampaignName || "test",
-            destination: config.whatsappNumber || "+910000000000",
+            campaignName: (config.whatsappCampaignName || "test").trim(),
+            destination: (config.whatsappNumber || "+910000000000").trim(),
             userName: "DVEPL Test",
           }),
           signal: controller.signal,
@@ -167,6 +163,18 @@ export class WhatsappService {
 
       if (!response.ok) {
         const body = await response.text();
+        if (
+          response.status === 400 &&
+          (body.includes("Campaign does not exist") ||
+            body.includes("Template params") ||
+            body.includes("templateParams") ||
+            body.includes("invalid destination"))
+        ) {
+          return {
+            success: true,
+            message: "AiSensy API key authenticated successfully!",
+          };
+        }
         throw new Error(
           `AiSensy API returned ${response.status}: ${body}`
         );
@@ -188,43 +196,93 @@ export class WhatsappService {
     number?: string;
   }) {
     const { apiKey, campaignName, number } = params;
+    // If number is provided, use it; otherwise fallback to default
+    const destination = (number || "").trim() || "+910000000000";
+    const campaign = (campaignName || "test").trim();
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    // First attempt to send with standard template parameters so the message actually delivers
+    const attempts = [
+      ["Test User"],
+      ["Test User", "DVEPL Notification"],
+      ["Test User", "DVEPL Notification", "Testing"],
+      [],
+    ];
 
-    try {
-      const response = await fetch(
-        `${AISENSY_API_BASE}${AISENSY_SEND_ENDPOINT}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            apiKey,
-            campaignName: campaignName || "test",
-            destination: number || "+910000000000",
-            userName: "DVEPL Test",
-          }),
-          signal: controller.signal,
-        }
-      );
+    for (let i = 0; i < attempts.length; i++) {
+      const templateParams = attempts[i];
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(
-          `AiSensy API returned ${response.status}: ${body}`
+      try {
+        const response = await fetch(
+          `${AISENSY_API_BASE}${AISENSY_SEND_ENDPOINT}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              apiKey: (apiKey || "").trim(),
+              campaignName: campaign,
+              destination,
+              userName: "DVEPL Admin",
+              templateParams,
+            }),
+            signal: controller.signal,
+          }
         );
-      }
 
-      return { success: true, message: "AiSensy connection verified successfully." };
-    } catch (e: any) {
-      throw new Error(
-        e.name === "AbortError"
-          ? "AiSensy API request timed out."
-          : e.message || "Failed to verify AiSensy connection."
-      );
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          return {
+            success: true,
+            message: destination && destination !== "+910000000000"
+              ? `Test WhatsApp message sent successfully to ${destination}!`
+              : "AiSensy connection verified and message sent successfully.",
+          };
+        }
+
+        const body = await response.text();
+
+        // If template params mismatch, retry next template params configuration
+        if (body.includes("Template params") || body.includes("templateParams")) {
+          if (i < attempts.length - 1) {
+            continue;
+          }
+          return {
+            success: true,
+            message: `AiSensy API key authenticated! (Campaign "${campaign}" found and API key is valid)`,
+          };
+        }
+
+        if (
+          response.status === 400 &&
+          (body.includes("Campaign does not exist") ||
+            body.includes("invalid destination"))
+        ) {
+          let extraNote = "";
+          if (body.includes("Campaign does not exist") && campaignName) {
+            extraNote = ` (Note: Campaign "${campaignName}" does not exist in AiSensy)`;
+          }
+
+          return {
+            success: true,
+            message: `AiSensy API key authenticated successfully!${extraNote}`,
+          };
+        }
+
+        throw new Error(`AiSensy API returned ${response.status}: ${body}`);
+      } catch (e: any) {
+        if (i === attempts.length - 1) {
+          throw new Error(
+            e.name === "AbortError"
+              ? "AiSensy API request timed out."
+              : e.message || "Failed to verify AiSensy connection."
+          );
+        }
+      }
     }
+
+    return { success: true, message: "AiSensy connection verified." };
   }
 }
 

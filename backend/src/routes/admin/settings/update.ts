@@ -95,7 +95,8 @@ async function updateSettingsRoute(
           }
 
           const rawApiKey = gateway.apiKey;
-          const encryptedApiKey = rawApiKey ? encrypt(rawApiKey) : null;
+          const isMaskedApiKey = typeof rawApiKey === "string" && rawApiKey.includes("****");
+          const encryptedApiKey = rawApiKey && !isMaskedApiKey ? encrypt(rawApiKey) : null;
 
           const updateData: any = { emailEnabled, whatsappEnabled };
 

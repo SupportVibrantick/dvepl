@@ -27,12 +27,12 @@
     "address": ""
   },
   "gatewaySettings": {
-    "provider": "twilio",
-    "apiKey": "test-api-key-2",
-    "instanceId": "https://api.whatsapp.com/v2",
-    "baseUrl": "https://api.whatsapp.com/v2",
-    "secretKey": "test-secret-key-2",
-    "enabled": true
+    "provider": "aisensy",
+    "apiKey": "",
+    "instanceId": "",
+    "baseUrl": "",
+    "secretKey": "",
+    "enabled": false
   },
   "brandColor": "#1d5c2e"
 }

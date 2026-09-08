@@ -5,7 +5,7 @@ import {
   FastifyRequest,
 } from "fastify";
 import { adminLogs } from "../../../services/logger/contextLogger";
-import { maskApiKey } from "../../../utils/encryption";
+import { decrypt, maskApiKey } from "../../../utils/encryption";
 
 async function readSettingsRoute(
   fastify: FastifyInstance,
@@ -65,8 +65,16 @@ async function readSettingsRoute(
             if (typeof settings.waSettings.clientNotify !== "boolean") settings.waSettings.clientNotify = isWaEnabled;
 
             if (!settings.gatewaySettings) settings.gatewaySettings = {};
-            settings.gatewaySettings.provider = dbConfig.whatsappProvider?.toLowerCase() || settings.gatewaySettings.provider || "twilio";
-            settings.gatewaySettings.apiKey = dbConfig.whatsappApiKey ? maskApiKey(dbConfig.whatsappApiKey) : settings.gatewaySettings.apiKey || "";
+            settings.gatewaySettings.provider = dbConfig.whatsappProvider?.toLowerCase() || (settings.gatewaySettings.provider === "twilio" ? null : settings.gatewaySettings.provider) || "aisensy";
+            let maskedKey = "";
+            if (dbConfig.whatsappApiKey) {
+              try {
+                maskedKey = maskApiKey(decrypt(dbConfig.whatsappApiKey));
+              } catch {
+                maskedKey = maskApiKey(dbConfig.whatsappApiKey);
+              }
+            }
+            settings.gatewaySettings.apiKey = maskedKey || settings.gatewaySettings.apiKey || "";
             settings.gatewaySettings.instanceId = dbConfig.whatsappEndpoint || settings.gatewaySettings.instanceId || "";
             settings.gatewaySettings.baseUrl = dbConfig.whatsappEndpoint || settings.gatewaySettings.baseUrl || "";
             settings.gatewaySettings.secretKey = settings.gatewaySettings.secretKey || "";
