@@ -46,9 +46,6 @@ const ReportsPage = lazy(() => import("@/pages/reports/reportsPage"));
 
 // CRM
 const CustomersPage = lazy(() => import("@/pages/customers/customersPage"));
-const ContactPersonsPage = lazy(
-  () => import("@/pages/contacts/contactPersonsPage"),
-);
 const CommunicationHistoryPage = lazy(
   () => import("@/pages/communication/communicationHistoryPage"),
 );
@@ -171,7 +168,6 @@ export function AppRouter() {
               <Route path="/tasks" element={<TasksPage />} />
               {/* CRM */}
               <Route path="/crm/customers" element={<CustomersPage />} />
-              <Route path="/crm/contacts" element={<ContactPersonsPage />} />
               <Route
                 path="/crm/communication"
                 element={<CommunicationHistoryPage />}

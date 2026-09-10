@@ -180,7 +180,14 @@ export function DeliveryPage() {
           companyCode: so.dveplCode || so.companyCode || `DVEPL/26-27/${100 + index}`,
           customerName: so.partyName || so.customerName || so.company?.name || 'Standard Client',
           itemName: itemsText,
-          assignedTo: so.orderTakenBy?.name || so.assignedTo || 'Unassigned',
+          assignedTo: [
+            ...(so.orderTakenBy?.name ? [so.orderTakenBy.name] : []),
+            ...(Array.isArray(so.takenByUsers)
+              ? so.takenByUsers
+                  .map((tu: any) => tu?.user?.name)
+                  .filter(Boolean)
+              : []),
+          ].join(', ') || so.assignedTo || 'Unassigned',
           deliveryTarget: deliveryTarget,
           dispatchDate: rawPoDate || '',
           actualDeliveryDate: rawConfirmDate || '',

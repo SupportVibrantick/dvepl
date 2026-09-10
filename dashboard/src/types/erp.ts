@@ -481,19 +481,6 @@ export interface Customer {
   deletedAt?: string | null;
 }
 
-export interface ContactPerson {
-  id: string;
-  customerId: string;
-  name: string;
-  designation?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  isPrimary: boolean;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string | null;
-}
-
 export interface CommunicationHistory {
   id: string;
   customerId: string;

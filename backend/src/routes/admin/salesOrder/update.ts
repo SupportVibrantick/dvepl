@@ -63,6 +63,7 @@ async function adminSalesOrderUpdateRoutes(
           dveplCode,
           status,
           orderTakenById,
+          orderTakenByUserIds,
           partyName,
           caNo,
           contactDetails,
@@ -157,6 +158,73 @@ async function adminSalesOrderUpdateRoutes(
               message:
                 "Order Taken By user does not belong to this company.",
             });
+          }
+        }
+
+        // ==========================
+        // Multiple Order Taken By Users Validation
+        // ==========================
+
+        const takenByUserIds =
+          orderTakenByUserIds !== undefined
+            ? Array.from(
+                new Set(
+                  [
+                    ...(orderTakenById ? [orderTakenById] : []),
+                    ...(Array.isArray(orderTakenByUserIds)
+                      ? orderTakenByUserIds
+                      : []),
+                  ].filter(Boolean),
+                ),
+              )
+            : null;
+
+        if (takenByUserIds !== null && takenByUserIds.length > 0) {
+          const targetCompanyId =
+            companyId ?? existingOrder.companyId;
+
+          const users =
+            await fastify.prisma.user.findMany({
+              where: {
+                id: { in: takenByUserIds },
+              },
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                companyId: true,
+                isActive: true,
+                deletedAt: true,
+              },
+            });
+
+          const validIds = new Set(
+            users.map((u) => u.id),
+          );
+
+          for (const uid of takenByUserIds) {
+            const user = users.find(
+              (u) => u.id === uid,
+            );
+            if (
+              !user ||
+              !validIds.has(uid) ||
+              !user.isActive ||
+              user.deletedAt
+            ) {
+              return reply.status(404).send({
+                success: false,
+                message:
+                  "Order Taken By user not found or inactive.",
+              });
+            }
+            if (user.companyId !== targetCompanyId) {
+              return reply.status(400).send({
+                success: false,
+                message:
+                  "Order Taken By user does not belong to this company.",
+              });
+            }
           }
         }
 
@@ -403,6 +471,29 @@ async function adminSalesOrderUpdateRoutes(
               }
 
               // ==========================
+              // Replace Multiple Order Taken By Users
+              // ==========================
+
+              if (takenByUserIds !== null) {
+                await tx.salesOrderTakenBy.deleteMany({
+                  where: {
+                    salesOrderId: id,
+                  },
+                });
+
+                if (takenByUserIds.length > 0) {
+                  await tx.salesOrderTakenBy.createMany({
+                    data: takenByUserIds.map(
+                      (userId) => ({
+                        salesOrderId: id,
+                        userId,
+                      }),
+                    ),
+                  });
+                }
+              }
+
+              // ==========================
               // Save EAV Custom Fields
               // ==========================
 
@@ -449,6 +540,18 @@ async function adminSalesOrderUpdateRoutes(
                   id: true,
                   name: true,
                   email: true,
+                },
+              },
+
+              takenByUsers: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                    },
+                  },
                 },
               },
 

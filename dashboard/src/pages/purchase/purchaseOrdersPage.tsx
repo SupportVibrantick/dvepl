@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
   Search,
@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   Printer,
   History,
+  ArrowLeft,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -312,6 +313,7 @@ export function PurchaseOrdersPage() {
   // Deep-link support: /purchase/orders?order=<salesOrderId>&ref=<code>&mode=generate|view
   // The order ID is the primary link (direct FK); ref is display/legacy fallback.
   const location = useLocation();
+  const navigate = useNavigate();
   const [linkedRefCode, setLinkedRefCode] = useState("");
   const [linkedOrderId, setLinkedOrderId] = useState("");
   const [linkedMode, setLinkedMode] = useState<"generate" | "view" | "">("");
@@ -1571,11 +1573,21 @@ export function PurchaseOrdersPage() {
     <div className="space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xl">📋</div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Purchase Orders</h1>
-            <p className="mt-1 text-xs text-muted-foreground">{new Set(revisions.map((r) => r.poNumber)).size} purchase orders • {revisions.length} revisions in history</p>
+        <div className="flex flex-col gap-3">
+          {linkedOrderId && (
+            <button
+              onClick={() => navigate(`/orders/${linkedOrderId}?tab=workflow`)}
+              className="inline-flex items-center gap-1.5 self-start text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="size-4" /> Back to Order
+            </button>
+          )}
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xl">📋</div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Purchase Orders</h1>
+              <p className="mt-1 text-xs text-muted-foreground">{new Set(revisions.map((r) => r.poNumber)).size} purchase orders • {revisions.length} revisions in history</p>
+            </div>
           </div>
         </div>
         {canCreate && (

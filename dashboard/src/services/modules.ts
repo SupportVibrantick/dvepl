@@ -65,8 +65,6 @@ export const crmApi = {
     sync: () => apiClient.post(API_ENDPOINTS.crm.customers.sync).then(res => res.data),
   },
 
-  contacts: crud(API_ENDPOINTS.crm.contacts),
-
   communications: crud(
     API_ENDPOINTS.crm.communications,
     { update: false }

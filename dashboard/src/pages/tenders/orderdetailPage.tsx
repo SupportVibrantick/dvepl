@@ -43,7 +43,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "react-hot-toast";
 import { useERPStore } from "@/store/erpStore";
 import { isAdminUser } from "@/utils/pagePermissions";
-import { useWorkflowTemplate } from "@/hooks/useWorkflowTemplate";
+import { useWorkflowTemplate, getStageRedirectInfo } from "@/hooks/useWorkflowTemplate";
 import workflowApi from "@/services/workflowApi";
 
 // Build a full URL from a relative fileUrl path returned by the backend
@@ -56,6 +56,32 @@ function buildFileUrl(rawUrl: string): string {
   } catch {
     return rawUrl;
   }
+}
+
+function formatAssignmentDateTime(dateStr?: string | Date | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "";
+  }
+}
+
+function purchaseOrdersUrl(tender: QuoteTenderOrder): string {
+  return `/purchase/orders?${new URLSearchParams({
+    ref: tender.reference_code,
+    order: tender.id,
+    mode: tender.poStatus === "No PO" ? "generate" : "view",
+  }).toString()}`;
 }
 
 import {
@@ -362,7 +388,7 @@ export function OrderDetailPage() {
               Back to Orders
             </button>
             <span className="text-muted-foreground/40">|</span>
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-foreground">
                 {tender.tender_no || tender.dveplCode || "Order Details"}
               </span>
@@ -379,118 +405,10 @@ export function OrderDetailPage() {
                   {tender.dveplCode}
                 </span>
               )}
-            </div>
+            </div> */}
           </div>
-
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleFullscreen}
-              title={isFullscreen ? "Exit Full Screen" : "Enter Full Screen"}
-              className="h-8 text-xs font-semibold rounded-xl gap-1.5"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="size-3.5" />
-              ) : (
-                <Maximize2 className="size-3.5" />
-              )}
-              <span className="hidden sm:inline">
-                {isFullscreen ? "Exit Full Screen" : "Full Screen"}
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canAccessAccounts}
-              onClick={() => {
-                if (!canAccessAccounts) return;
-                navigate(`/accounts/${tender.id}`);
-              }}
-              className={`h-8 text-xs font-bold rounded-xl gap-1.5 border-sky-500/30 transition-all shadow-3xs ${
-                canAccessAccounts
-                  ? "text-sky-600 dark:text-sky-400 bg-sky-500/5 hover:bg-sky-500/10 cursor-pointer"
-                  : "opacity-40 cursor-not-allowed bg-muted/20 text-muted-foreground"
-              }`}
-              title={
-                canAccessAccounts
-                  ? "Open Accounts Costing & Quotation sheet"
-                  : "Accounts & Costing is only accessible to assigned accounts personnel and administrators"
-              }
-            >
-              <FileSpreadsheet className="size-3.5" />
-              <span>Accounts & Costing</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canAccessVendors}
-              onClick={() => {
-                if (!canAccessVendors) return;
-                navigate(`/purchase/vendors?orderId=${tender.id}&ref=${encodeURIComponent(tender.reference_code || "")}`);
-              }}
-              className={`h-8 text-xs font-bold rounded-xl gap-1.5 border-amber-500/30 transition-all shadow-3xs ${
-                canAccessVendors
-                  ? "text-amber-600 dark:text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 cursor-pointer"
-                  : "opacity-40 cursor-not-allowed bg-muted/20 text-muted-foreground"
-              }`}
-              title={
-                canAccessVendors
-                  ? "Open Vendors & Purchase Orders"
-                  : "Vendors is only accessible to authorized personnel and administrators"
-              }
-            >
-              <Users className="size-3.5" />
-              <span>Vendors</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canAccessDrawings}
-              onClick={() => {
-                if (!canAccessDrawings) return;
-                navigate(`/export-orders?orderId=${tender.id}`);
-              }}
-              className={`h-8 text-xs font-bold rounded-xl gap-1.5 border-purple-500/30 transition-all shadow-3xs ${
-                canAccessDrawings
-                  ? "text-purple-600 dark:text-purple-400 bg-purple-500/5 hover:bg-purple-500/10 cursor-pointer"
-                  : "opacity-40 cursor-not-allowed bg-muted/20 text-muted-foreground"
-              }`}
-              title={
-                canAccessDrawings
-                  ? "Open Engineering Drawings & Revisions"
-                  : "Engineering Drawings is only accessible to assigned drawing personnel and administrators"
-              }
-            >
-              <Layers className="size-3.5" />
-              <span>Engineering Drawings</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs font-semibold rounded-xl"
-              onClick={() => setIsEditOpen(true)}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              disabled={!isAdmin}
-              onClick={() => {
-                if (!isAdmin) return;
-                setAssigningTender(tender);
-              }}
-              title={
-                isAdmin
-                  ? "Manage Assignments"
-                  : "Only administrators can manage assignments"
-              }
-              className="h-8 text-xs font-bold rounded-xl gap-1.5"
-            >
-              <UserPlus className="size-3.5" />
-              Assignments
-            </Button>
+            
           </div>
         </div>
 
@@ -878,35 +796,24 @@ export function OrderDetailPage() {
                               a.stage === s.key ||
                               a.stage === "",
                           );
-                          const stageRemark = (tender.assignments || []).find(
-                            (a) =>
-                              a.remarks &&
-                              (!a.stage || a.stage === s.key || a.stage === ""),
-                          )?.remarks;
+
+                          const redirectInfo = getStageRedirectInfo(s.targetPage, tender);
 
                           const stageHasActions =
-                            isAccountsStage || canWorkOnOrder || isAdmin;
+                            Boolean(redirectInfo?.url) || canWorkOnOrder || isAdmin;
 
                           return (
                             <div
                               key={s.key}
                               onClick={() => {
-                                if (isAccountsStage && canAccessAccounts) {
-                                  navigate(`/accounts/${tender.id}`);
-                                } else if (isVendorStage && canAccessVendors) {
-                                  navigate(`/purchase/vendors?orderId=${tender.id}&ref=${encodeURIComponent(tender.reference_code || "")}`);
-                                } else if (isDrawingStage && canAccessDrawings) {
-                                  navigate(`/export-orders?orderId=${tender.id}`);
+                                if (redirectInfo?.url) {
+                                  navigate(redirectInfo.url);
                                 }
                               }}
                               className={`group relative flex items-center justify-between gap-3 sm:gap-4 rounded-2xl border bg-card p-3.5 sm:p-4 transition-all duration-200 shadow-xs hover:shadow-md ${
-                                isAccountsStage && canAccessAccounts
-                                  ? "cursor-pointer hover:border-sky-500/50 hover:bg-sky-500/[0.02]"
-                                  : isVendorStage && canAccessVendors
-                                    ? "cursor-pointer hover:border-amber-500/50 hover:bg-amber-500/[0.02]"
-                                    : isDrawingStage && canAccessDrawings
-                                      ? "cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/[0.02]"
-                                      : ""
+                                redirectInfo?.url
+                                  ? "cursor-pointer hover:border-primary/50 hover:bg-primary/[0.015]"
+                                  : ""
                               } ${
                                 stageCurrent
                                   ? "border-blue-500/40 ring-1 ring-blue-500/20 bg-blue-500/[0.02]"
@@ -951,7 +858,7 @@ export function OrderDetailPage() {
                                     <h4 className="text-xs sm:text-sm font-bold text-foreground truncate">
                                       {s.name}
                                     </h4>
-                                    {isAccountsStage && (
+                                    {/* {isAccountsStage && (
                                       <span
                                         className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
                                           canAccessAccounts
@@ -983,25 +890,54 @@ export function OrderDetailPage() {
                                       >
                                         {canAccessDrawings ? "Click to open drawings" : "Restricted access"}
                                       </span>
-                                    )}
+                                    )} */}
                                   </div>
 
-                                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                      <Users className="size-3 shrink-0 opacity-70" />
-                                      {stageUsers.length > 0
-                                        ? `${stageUsers.length} user${stageUsers.length > 1 ? "s" : ""} assigned`
-                                        : "No users assigned"}
-                                    </span>
-                                    {stageRemark && (
-                                      <>
-                                        <span>•</span>
-                                        <span className="italic truncate max-w-[220px]" title={stageRemark}>
-                                          “{stageRemark}”
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
+                                  {stageUsers.length > 0 ? (
+                                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1 text-[11px] text-muted-foreground">
+                                      {stageUsers.map((a, uIdx) => {
+                                        const userName =
+                                          a.user?.name ||
+                                          store.users.find((u) => u.id === a.userId)?.name ||
+                                          (a.user?.email ? a.user.email.split("@")[0] : null) ||
+                                          "Assigned User";
+
+                                        const assignedDate = formatAssignmentDateTime(
+                                          a.createdAt || (tender as any).createdAt || tender.remarked_at,
+                                        );
+
+                                        return (
+                                          <div
+                                            key={a.id || `${a.userId}-${uIdx}`}
+                                            className="inline-flex items-center gap-1.5 flex-wrap"
+                                          >
+                                            <span className="inline-flex items-center gap-1 font-semibold text-foreground bg-muted/70 dark:bg-muted/40 px-2 py-0.5 rounded-md border border-border/50 text-[11px]">
+                                              <Users className="size-3 shrink-0 text-primary" />
+                                              <span>{userName}</span>
+                                            </span>
+
+                                            {assignedDate && (
+                                              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
+                                                <Clock3 className="size-3 shrink-0 opacity-60" />
+                                                <span>Assigned: {assignedDate}</span>
+                                              </span>
+                                            )}
+
+                                            {uIdx < stageUsers.length - 1 && (
+                                              <span className="text-muted-foreground/40 font-bold">•</span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground/60 italic">
+                                      <span className="flex items-center gap-1">
+                                        <Users className="size-3 shrink-0 opacity-50" />
+                                        <span>No user assigned</span>
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -1010,42 +946,16 @@ export function OrderDetailPage() {
                                 className="flex items-center gap-2 sm:gap-3 shrink-0"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {isAccountsStage && canAccessAccounts && (
+                                {redirectInfo?.url && (
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => navigate(`/accounts/${tender.id}`)}
-                                    className="h-7 text-xs font-semibold rounded-lg gap-1.5 border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 cursor-pointer shadow-3xs"
-                                    title="Open Accounts & Costing page"
+                                    onClick={() => navigate(redirectInfo.url)}
+                                    className="h-7 text-xs font-semibold rounded-lg gap-1.5 border-border/80 text-foreground bg-muted/20 hover:bg-muted cursor-pointer shadow-3xs"
+                                    title={redirectInfo.label}
                                   >
-                                    <FileSpreadsheet className="size-3.5" />
-                                    <span className="hidden sm:inline">Open Accounts Page</span>
-                                    <ChevronRight className="size-3" />
-                                  </Button>
-                                )}
-                                {isVendorStage && canAccessVendors && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => navigate(`/purchase/vendors?orderId=${tender.id}&ref=${encodeURIComponent(tender.reference_code || "")}`)}
-                                    className="h-7 text-xs font-semibold rounded-lg gap-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer shadow-3xs"
-                                    title="Open Vendors page"
-                                  >
-                                    <Users className="size-3.5" />
-                                    <span className="hidden sm:inline">Open Vendors Page</span>
-                                    <ChevronRight className="size-3" />
-                                  </Button>
-                                )}
-                                {isDrawingStage && canAccessDrawings && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => navigate(`/export-orders?orderId=${tender.id}`)}
-                                    className="h-7 text-xs font-semibold rounded-lg gap-1.5 border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 cursor-pointer shadow-3xs"
-                                    title="Open Engineering Drawings page"
-                                  >
-                                    <Layers className="size-3.5" />
-                                    <span className="hidden sm:inline">Open Drawings Page</span>
+                                    <ExternalLink className="size-3.5" />
+                                    <span className="hidden sm:inline">{redirectInfo.label}</span>
                                     <ChevronRight className="size-3" />
                                   </Button>
                                 )}
@@ -1087,45 +997,6 @@ export function OrderDetailPage() {
                                     sideOffset={6}
                                     className="w-52 rounded-xl p-1.5 shadow-lg border border-border bg-popover text-popover-foreground"
                                   >
-                                    {isAccountsStage && canAccessAccounts && (
-                                      <>
-                                        <DropdownMenuItem
-                                          onClick={() => navigate(`/accounts/${tender.id}`)}
-                                          className="gap-2.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-sky-600 dark:text-sky-400 cursor-pointer"
-                                        >
-                                          <FileSpreadsheet className="size-3.5 text-sky-500" />
-                                          Open Accounts & Costing
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-
-                                    {isVendorStage && canAccessVendors && (
-                                      <>
-                                        <DropdownMenuItem
-                                          onClick={() => navigate(`/purchase/vendors?orderId=${tender.id}&ref=${encodeURIComponent(tender.reference_code || "")}`)}
-                                          className="gap-2.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-amber-600 dark:text-amber-400 cursor-pointer"
-                                        >
-                                          <Users className="size-3.5 text-amber-500" />
-                                          Open Vendors Page
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-
-                                    {isDrawingStage && canAccessDrawings && (
-                                      <>
-                                        <DropdownMenuItem
-                                          onClick={() => navigate(`/export-orders?orderId=${tender.id}`)}
-                                          className="gap-2.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-purple-600 dark:text-purple-400 cursor-pointer"
-                                        >
-                                          <Layers className="size-3.5 text-purple-500" />
-                                          Open Engineering Drawings
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-
                                     {canWorkOnStage(s.key) && (
                                       <DropdownMenuItem
                                         onClick={() => handleStageToggle(s.key, !stageCompleted)}
@@ -1262,6 +1133,12 @@ export function OrderDetailPage() {
                             {assignment.user?.email && (
                               <p className="text-[10px] text-muted-foreground truncate">
                                 {assignment.user.email}
+                              </p>
+                            )}
+                            {assignment.createdAt && (
+                              <p className="text-[9px] text-muted-foreground/80 flex items-center gap-1 mt-0.5">
+                                <Clock3 className="size-2.5 opacity-60" />
+                                <span>Assigned: {formatAssignmentDateTime(assignment.createdAt)}</span>
                               </p>
                             )}
                           </div>

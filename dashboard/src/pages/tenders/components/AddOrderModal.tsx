@@ -42,10 +42,18 @@ import {
   ProjectDocumentUploadPanel,
 } from "./ProjectDocumentUploadPanel";
 import { ManageOrderDocumentsModal } from "./ManageOrderDocumentsModal";
+import { ManageOrderFieldsModal } from "./ManageOrderFieldsModal";
+import {
+  getAddOrderFormFieldConfig,
+} from "./addOrderModalFieldsConfig";
 import {
   getOrderDocumentCategories,
   normalizeCategoryName,
 } from "./orderDocumentsConfig";
+import {
+  DEFAULT_STAGE_ROWS,
+  getOrderStageRequirements,
+} from "./orderStageRequirementsConfig";
 import { isAdminUser } from "@/utils/pagePermissions";
 import { SalesOrderAttachment } from "../orderShared";
 
@@ -132,35 +140,6 @@ const EMPTY_ITEM: OrderItemForm = {
   gstPercentage: "18",
 };
 
-// Default fallback workflow stages with department labels
-const DEFAULT_STAGE_ROWS: StageRow[] = [
-  {
-    key: "UPLOAD_CUSTOMER_ORDER_DETAILS",
-    name: "Upload Customer Order Details For Accounts",
-    department: "Costing",
-  },
-  {
-    key: "UPLOAD_PO_VENDOR",
-    name: "Upload Purchase Order (PO) for Vendor",
-    department: "Accounts",
-  },
-  {
-    key: "UPLOAD_DRAWINGS",
-    name: "Upload Drawings",
-    department: "Design",
-  },
-  {
-    key: "UPLOAD_APPROVED_DRAWINGS",
-    name: "Upload Customer Approved Drawings",
-    department: "Design",
-  },
-  {
-    key: "TEST_STAGE",
-    name: "test stage",
-    department: "Costing",
-  },
-];
-
 // Helper to format Date -> YYYY-MM-DD
 function toDateInputFormat(date: Date) {
   const y = date.getFullYear();
@@ -242,6 +221,7 @@ export function AddOrderModal({
   const [projectReference, setProjectReference] = useState("");
 
   const [orderTakenById, setOrderTakenById] = useState<string | null>(null);
+  const [orderTakenByUserIds, setOrderTakenByUserIds] = useState<string[]>([]);
 
   // Workflow Stages & Responsibility assignments
   const [stageRows, setStageRows] = useState<StageRow[]>(DEFAULT_STAGE_ROWS);
@@ -260,6 +240,37 @@ export function AddOrderModal({
   >([]);
   const [allMandatoryDocsUploaded, setAllMandatoryDocsUploaded] = useState(false);
   const [isManageDocsOpen, setIsManageDocsOpen] = useState(false);
+  const [isManageFieldsOpen, setIsManageFieldsOpen] = useState(false);
+
+  // Admin-controlled required/optional configuration for this form.
+  // Admins can edit via ManageOrderFieldsModal; the resolved config applies
+  // to every user (drives the "*" indicators and submit-time validation).
+  const fieldConfig = useMemo(
+    () => getAddOrderFormFieldConfig(store.settings),
+    [store.settings],
+  );
+
+  // Per-stage required/optional configuration for the Job Responsibility section
+  const stageRequirements = useMemo(
+    () => getOrderStageRequirements(store.settings),
+    [store.settings],
+  );
+
+  const requiredStageNames = useMemo(() => {
+    return stageRows
+      .filter((stage) => stageRequirements[stage.key] === true)
+      .map((stage) => stage.name);
+  }, [stageRows, stageRequirements]);
+
+  const unassignedRequiredStageNames = useMemo(() => {
+    return stageRows
+      .filter((stage) => {
+        if (stageRequirements[stage.key] !== true) return false;
+        const assigned = stageAssignments[stage.key];
+        return !assigned || assigned === "__none__";
+      })
+      .map((stage) => stage.name);
+  }, [stageRows, stageRequirements, stageAssignments]);
 
   const currentUser = useMemo(() => {
     return store.users.find((user) => user.id === store.currentUserId) as any;
@@ -501,6 +512,25 @@ export function AddOrderModal({
             setOrderTakenById(order.orderTakenBy.id);
           }
 
+          const takenIds = Array.isArray(order.takenByUsers)
+            ? order.takenByUsers
+                .map((tu: any) => tu?.user?.id)
+                .filter(Boolean)
+            : [];
+
+          if (takenIds.length > 0) {
+            setOrderTakenByUserIds(Array.from(new Set(takenIds)));
+            setOrderTakenById(order.orderTakenById || takenIds[0]);
+          } else {
+            setOrderTakenByUserIds(
+              order.orderTakenById
+                ? [order.orderTakenById]
+                : order.orderTakenBy?.id
+                  ? [order.orderTakenBy.id]
+                  : []
+            );
+          }
+
           if (Array.isArray(order.assignments) && order.assignments.length > 0) {
             const mappedAssignments: Record<string, string> = {};
             order.assignments.forEach((a: any) => {
@@ -594,9 +624,10 @@ export function AddOrderModal({
         setOrderAttachments(editingOrder.attachments);
       }
       void fetchOrderDetails();
-    } else {
+} else {
       setOrderAttachments([]);
       setOrderTakenById(propOrderTakenById || null);
+      setOrderTakenByUserIds(propOrderTakenById ? [propOrderTakenById] : []);
     }
   }, [open, editingOrder, propOrderTakenById]);
 
@@ -698,13 +729,35 @@ export function AddOrderModal({
     }));
   };
 
+  const toggleOrderTakenByUser = (userId: string, checked: boolean) => {
+    setOrderTakenByUserIds((prev) => {
+      const next = checked
+        ? Array.from(new Set([...prev, userId]))
+        : prev.filter((id) => id !== userId);
+      setOrderTakenById(next[0] || null);
+      return next;
+    });
+  };
+
   const selectedOrderTakenByLabel = useMemo(() => {
-    if (!orderTakenById || orderTakenById === "__none__") return "";
-    const member = teamMembers.find((m) => m.id === orderTakenById);
-    return member
-      ? `${member.name}${member.email ? ` (${member.email})` : ""}`
-      : "";
-  }, [orderTakenById, teamMembers]);
+    const ids = Array.from(
+      new Set([
+        ...orderTakenByUserIds,
+        ...(orderTakenById && !orderTakenByUserIds.includes(orderTakenById)
+          ? [orderTakenById]
+          : []),
+      ]),
+    );
+    return ids
+      .map((id) => {
+        const member = teamMembers.find((m) => m.id === id);
+        return member
+          ? `${member.name}${member.email ? ` (${member.email})` : ""}`
+          : "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }, [orderTakenByUserIds, orderTakenById, teamMembers]);
 
   const getStageAssigneeLabel = (stageKey: string) => {
     const userId = stageAssignments[stageKey];
@@ -776,33 +829,70 @@ export function AddOrderModal({
       return;
     }
 
-    if (!dveplCode.trim()) {
-      toast.error("DVEPL Ref Code is required.");
-      return;
-    }
-
     const effectiveCompanyName = companyName.trim() || customerSearchQuery.trim();
-    if (!effectiveCompanyName) {
-      toast.error("Company / Firm Name is required.");
-      return;
+
+    // Required-field validation driven by admin-configured field requirements
+    const missingRequired: string[] = [];
+    if (fieldConfig.companyName && !effectiveCompanyName) {
+      missingRequired.push("Customer / Company Name");
+    }
+    if (fieldConfig.dveplCode && !dveplCode.trim()) {
+      missingRequired.push("DVEPL Ref Code");
+    }
+    if (fieldConfig.contactPerson && !contactPerson.trim()) {
+      missingRequired.push("Contact Person");
+    }
+    if (fieldConfig.mobileNo && !mobileNo.trim()) {
+      missingRequired.push("Mobile No");
+    }
+    if (fieldConfig.emailId && !emailId.trim()) {
+      missingRequired.push("Email ID");
+    }
+    if (fieldConfig.billingAddress && !billingAddress.trim()) {
+      missingRequired.push("Billing Address");
+    }
+    if (fieldConfig.shippingAddress) {
+      const shippingValue = sameAsBilling
+        ? billingAddress.trim()
+        : shippingAddress.trim();
+      if (!shippingValue) missingRequired.push("Shipping Address");
+    }
+    if (fieldConfig.orderDate && !orderDate.trim()) {
+      missingRequired.push("Date of Order");
+    }
+    if (fieldConfig.commitment) {
+      if (commitmentType === "fixed" && !commitmentDate.trim()) {
+        missingRequired.push("Date of Commitment (Fixed)");
+      }
+      if (commitmentType === "days" && !commitmentDays.trim()) {
+        missingRequired.push("Date of Commitment (Days)");
+      }
+    }
+    if (fieldConfig.customerPoNo && !customerPoNo.trim()) {
+      missingRequired.push("Customer PO No");
+    }
+    if (fieldConfig.totalPanels && !totalPanels.trim()) {
+      missingRequired.push("Total Panels / Units");
+    }
+    if (fieldConfig.advance && !advance.trim()) {
+      missingRequired.push("Advance");
+    }
+    if (fieldConfig.projectReference && !projectReference.trim()) {
+      missingRequired.push("Project Reference");
+    }
+    if (fieldConfig.orderTakenBy && orderTakenByUserIds.length === 0) {
+      missingRequired.push("Order Taken By / Concerned Person");
+    }
+    if (unassignedRequiredStageNames.length > 0) {
+      missingRequired.push(
+        `Job Responsibility (${unassignedRequiredStageNames.join(", ")})`,
+      );
     }
 
-    if (commitmentType === "fixed" && !commitmentDate) {
-      toast.error("Date of Commitment is required.");
-      return;
-    }
-    if (commitmentType === "days" && !commitmentDays.trim()) {
-      toast.error("Number of Commitment Days is required.");
-      return;
-    }
-
-    if (!advance.trim()) {
-      toast.error("Advance amount/terms is required.");
-      return;
-    }
-
-    if (!projectReference.trim()) {
-      toast.error("Project Reference is required.");
+    if (missingRequired.length > 0) {
+      toast.error(
+        `Please fill the required field(s): ${missingRequired.join(", ")}`
+      );
       return;
     }
 
@@ -858,15 +948,25 @@ export function AddOrderModal({
             },
           ];
 
+    const finalTakenByUserIds = Array.from(
+      new Set([
+        ...orderTakenByUserIds,
+        ...(orderTakenById && !orderTakenByUserIds.includes(orderTakenById)
+          ? [orderTakenById]
+          : []),
+      ]),
+    );
+
     const payload = {
       ...(editingOrder
         ? {
-            ...(orderTakenById ? { orderTakenById } : {}),
+            orderTakenById: finalTakenByUserIds[0] || null,
           }
         : {
             companyId: effectiveCompanyId,
-            orderTakenById: orderTakenById || null,
+            orderTakenById: finalTakenByUserIds[0] || null,
           }),
+      orderTakenByUserIds: finalTakenByUserIds,
       customerId: selectedCustomerId || null,
       dveplCode: dveplCode.trim(),
       status: editingOrder?.status || "PENDING",
@@ -1024,6 +1124,19 @@ export function AddOrderModal({
               Step 1 — capture customer & order details. Documents can be attached below.
             </p>
           </div>
+          {isAdmin && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsManageFieldsOpen(true)}
+              className="shrink-0 h-8 text-[11px] font-semibold gap-1.5 rounded-lg border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
+              title="Admins can configure which fields are required before submission"
+            >
+              <Settings className="size-3" />
+              Field Requirements
+            </Button>
+          )}
         </DialogHeader>
 
         {/* ========================================================
@@ -1040,7 +1153,7 @@ export function AddOrderModal({
             {/* Customer / Company Combobox */}
             <div className="lg:col-span-8 space-y-1 relative" ref={customerDropdownRef}>
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                <span className="text-red-500 font-bold">*</span> CUSTOMER / COMPANY NAME
+                {fieldConfig.companyName && <span className="text-red-500 font-bold">*</span>} CUSTOMER / COMPANY NAME
               </label>
               <div className="relative">
                 <Input
@@ -1121,7 +1234,7 @@ export function AddOrderModal({
             {/* DVEPL Ref Code */}
             <div className="lg:col-span-4 space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                <span className="text-red-500 font-bold">*</span> DVEPL REF CODE
+                {fieldConfig.dveplCode && <span className="text-red-500 font-bold">*</span>} DVEPL REF CODE
               </label>
               <Input
                 value={dveplCode}
@@ -1138,7 +1251,7 @@ export function AddOrderModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                CONTACT PERSON
+                {fieldConfig.contactPerson && <span className="text-red-500 font-bold">*</span>} CONTACT PERSON
               </label>
               <Input
                 value={contactPerson}
@@ -1150,7 +1263,7 @@ export function AddOrderModal({
 
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                MOBILE NO
+                {fieldConfig.mobileNo && <span className="text-red-500 font-bold">*</span>} MOBILE NO
               </label>
               <Input
                 value={mobileNo}
@@ -1162,7 +1275,7 @@ export function AddOrderModal({
 
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                EMAIL ID
+                {fieldConfig.emailId && <span className="text-red-500 font-bold">*</span>} EMAIL ID
               </label>
               <Input
                 type="email"
@@ -1179,7 +1292,7 @@ export function AddOrderModal({
               ====================================================== */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-              BILLING ADDRESS
+              {fieldConfig.billingAddress && <span className="text-red-500 font-bold">*</span>} BILLING ADDRESS
             </label>
             <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50/50 dark:bg-neutral-900/30">
               <div className="flex items-center justify-between gap-3 text-xs">
@@ -1218,7 +1331,7 @@ export function AddOrderModal({
               ====================================================== */}
           <div className="space-y-2">
             <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-              SHIPPING ADDRESS
+              {fieldConfig.shippingAddress && <span className="text-red-500 font-bold">*</span>} SHIPPING ADDRESS
             </label>
             <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-neutral-700 dark:text-neutral-300">
               <Checkbox
@@ -1248,7 +1361,7 @@ export function AddOrderModal({
             {/* Date of Order */}
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                DATE OF ORDER
+                {fieldConfig.orderDate && <span className="text-red-500 font-bold">*</span>} DATE OF ORDER
               </label>
               <div className="relative">
                 <Input
@@ -1264,7 +1377,7 @@ export function AddOrderModal({
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase">
-                  <span className="text-red-500 font-bold">*</span> DATE OF COMMITMENT
+                  {fieldConfig.commitment && <span className="text-red-500 font-bold">*</span>} DATE OF COMMITMENT
                 </label>
                 <div className="inline-flex rounded-md p-0.5 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shrink-0">
                   <button
@@ -1321,7 +1434,7 @@ export function AddOrderModal({
             {/* Customer PO No */}
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                CUSTOMER PO NO
+                {fieldConfig.customerPoNo && <span className="text-red-500 font-bold">*</span>} CUSTOMER PO NO
               </label>
               <Input
                 value={customerPoNo}
@@ -1338,7 +1451,7 @@ export function AddOrderModal({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                TOTAL PANELS / UNITS
+                {fieldConfig.totalPanels && <span className="text-red-500 font-bold">*</span>} TOTAL PANELS / UNITS
               </label>
               <Input
                 value={totalPanels}
@@ -1350,7 +1463,7 @@ export function AddOrderModal({
 
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                <span className="text-red-500 font-bold">*</span> ADVANCE
+                {fieldConfig.advance && <span className="text-red-500 font-bold">*</span>} ADVANCE
               </label>
               <Input
                 value={advance}
@@ -1362,7 +1475,7 @@ export function AddOrderModal({
 
             <div className="space-y-1">
               <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-                <span className="text-red-500 font-bold">*</span> PROJECT REFERENCE
+                {fieldConfig.projectReference && <span className="text-red-500 font-bold">*</span>} PROJECT REFERENCE
               </label>
               <Input
                 value={projectReference}
@@ -1378,28 +1491,54 @@ export function AddOrderModal({
               ====================================================== */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
-              ORDER TAKEN BY / CONCERNED PERSON
+              {fieldConfig.orderTakenBy && <span className="text-red-500 font-bold">*</span>} ORDER TAKEN BY / CONCERNED PERSON
             </label>
-            <Select
-              value={orderTakenById || "__none__"}
-              onValueChange={(val) =>
-                setOrderTakenById(val === "__none__" ? null : val)
-              }
-            >
-              <SelectTrigger className="h-10 rounded-lg border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-normal">
-                <SelectValue placeholder="Select team member">
-                  {selectedOrderTakenByLabel || undefined}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Select team member</SelectItem>
-                {teamMembers.map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {member.name} {member.email ? `(${member.email})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2 max-h-44 overflow-y-auto space-y-1">
+              {teamMembers.length === 0 ? (
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 px-1 py-1">
+                  No team members available
+                </p>
+              ) : (
+                teamMembers.map((member) => {
+                  const checked = orderTakenByUserIds.includes(member.id);
+                  return (
+                    <label
+                      key={member.id}
+                      className={`flex items-start gap-2 cursor-pointer rounded-md px-2 py-1.5 text-xs transition-colors ${
+                        checked
+                          ? "bg-blue-50 dark:bg-blue-950/40 ring-1 ring-blue-200 dark:ring-blue-900"
+                          : "hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                      }`}
+                    >
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={checked}
+                        onCheckedChange={(val) =>
+                          toggleOrderTakenByUser(member.id, Boolean(val))
+                        }
+                      />
+                      <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                        {member.name}
+                        {member.email ? (
+                          <span className="block text-[10px] font-normal text-neutral-500 dark:text-neutral-400">
+                            {member.email}
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            {selectedOrderTakenByLabel ? (
+              <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-normal leading-relaxed">
+                Selected: {selectedOrderTakenByLabel}
+              </p>
+            ) : (
+              <p className="text-[10px] text-neutral-400 dark:text-neutral-500 font-normal leading-relaxed">
+                Select one or more team members who will handle this order.
+              </p>
+            )}
           </div>
 
           {/* ======================================================
@@ -1410,8 +1549,13 @@ export function AddOrderModal({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-[11px] font-bold tracking-wider text-neutral-800 dark:text-neutral-200 uppercase">
-                    <span className="text-red-500 font-bold">*</span> JOB RESPONSIBILITY — WHO HANDLES EACH STAGE
+                    {requiredStageNames.length > 0 && <span className="text-red-500 font-bold">*</span>} JOB RESPONSIBILITY — WHO HANDLES EACH STAGE
                   </h3>
+                  {requiredStageNames.length > 0 && (
+                    <span className="text-[10px] bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-semibold px-2 py-0.5 rounded-full border border-red-200 dark:border-red-800/60">
+                      {requiredStageNames.length} required stage{requiredStageNames.length > 1 ? "s" : ""}
+                    </span>
+                  )}
                   {!isAdmin && (
                     <span className="text-[10px] bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 font-medium px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
                       Admin Managed Only
@@ -1452,6 +1596,9 @@ export function AddOrderModal({
                     className="p-3 flex items-center justify-between gap-4 text-xs hover:bg-neutral-50/50 dark:hover:bg-neutral-900/50 transition-colors"
                   >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      {stageRequirements[stage.key] === true && (
+                        <span className="text-red-500 font-bold">*</span>
+                      )}
                       <span className="font-semibold text-neutral-800 dark:text-neutral-200 truncate">
                         {stage.name}
                       </span>
@@ -1535,6 +1682,16 @@ export function AddOrderModal({
               open={isManageDocsOpen}
               onOpenChange={setIsManageDocsOpen}
               categories={getOrderDocumentCategories(store.settings)}
+            />
+          )}
+
+          {/* Manage Form Field Requirements Modal for Admin */}
+          {isAdmin && (
+            <ManageOrderFieldsModal
+              open={isManageFieldsOpen}
+              onOpenChange={setIsManageFieldsOpen}
+              fields={fieldConfig}
+              stageRequirements={stageRequirements}
             />
           )}
 

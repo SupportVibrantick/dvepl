@@ -230,6 +230,7 @@ model User {
   salesOrderAttachments             SalesOrderAttachment[]
   salesOrdersCreated                SalesOrder[]                       @relation("OrderCreatedBy")
   salesOrdersTaken                  SalesOrder[]                       @relation("OrderTakenBy")
+  takenBySalesOrders                SalesOrderTakenBy[]
   technicalClarificationActivities  TechnicalClarificationActivity[]
   technicalClarificationAttachments TechnicalClarificationAttachment[]
   technicalClarificationReplies     TechnicalClarificationReply[]
@@ -1325,6 +1326,7 @@ model SalesOrder {
   createdBy              User                    @relation("OrderCreatedBy", fields: [createdById], references: [id])
   customer               Customer?               @relation(fields: [customerId], references: [id])
   orderTakenBy           User?                   @relation("OrderTakenBy", fields: [orderTakenById], references: [id])
+  takenByUsers           SalesOrderTakenBy[]
   quotation              Quotation?              @relation(fields: [quotationId], references: [id])
   tender                 Tender?                 @relation(fields: [tenderId], references: [id])
   workOrders             WorkOrder[]
@@ -1340,6 +1342,20 @@ model SalesOrder {
   @@index([status])
   @@index([orderTakenById])
   @@map("sales_orders")
+}
+
+model SalesOrderTakenBy {
+  id           String     @id @default(uuid())
+  salesOrderId String
+  userId       String
+  createdAt    DateTime   @default(now())
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([salesOrderId, userId])
+  @@index([userId])
+  @@map("sales_order_taken_by")
 }
 
 model WorkflowEvent {

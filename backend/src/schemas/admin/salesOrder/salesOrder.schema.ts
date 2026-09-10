@@ -35,6 +35,9 @@ export const salesOrderSchema = z.object({
 
   orderTakenById: z.string().uuid().nullable().optional(),
 
+  // Multiple "Order Taken By" users (many-to-many)
+  orderTakenByUserIds: z.array(z.string().uuid()).optional(),
+
   partyName: z.string().min(1, "Party name is required"),
 
   caNo: z.string().nullable().optional(),

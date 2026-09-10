@@ -59,6 +59,16 @@ async function adminReportReadRouteGroup(fastify: FastifyInstance, options: Fast
                 name: true
               }
             },
+            takenByUsers: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            },
             items: true
           }
         });
@@ -151,15 +161,25 @@ async function adminReportReadRouteGroup(fastify: FastifyInstance, options: Fast
         else if (type === "salesperson") {
           const map: Record<string, any> = {};
           filtered.forEach((o) => {
-            const name = o.orderTakenBy?.name || (o as any).concernedPerson || (o as any).takenBy || "Unassigned";
-            if (!map[name]) {
-              map[name] = { name, count: 0, revenue: 0, completed: 0 };
-            }
-            map[name].count++;
-            map[name].revenue += getOrderTotal(o);
-            if (o.status === "COMPLETED") map[name].completed++;
+            const names = Array.from(
+              new Set(
+                [
+                  ...(o.takenByUsers || []).map((tu: any) => tu.user?.name).filter(Boolean),
+                  o.orderTakenBy?.name,
+                ].filter(Boolean) as string[],
+              ),
+            );
+            const salesNames = names.length > 0 ? names : ["Unassigned"];
+            salesNames.forEach((name) => {
+              if (!map[name]) {
+                map[name] = { name, count: 0, revenue: 0, completed: 0 };
+              }
+              map[name].count++;
+              map[name].revenue += getOrderTotal(o);
+              if (o.status === "COMPLETED") map[name].completed++;
+            });
           });
-          dataRows = Object.values(map).sort((a, b) => b.revenue - a.revenue);
+          dataRows = Object.values(map).sort((a: any, b: any) => b.revenue - a.revenue);
         } 
         
         else if (type === "finance") {

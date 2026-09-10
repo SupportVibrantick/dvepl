@@ -41,7 +41,6 @@ export const INITIAL_DOCUMENT_CATEGORIES: DocumentCategoryDef[] = [
   },
 ];
 
-export const ORDER_DOCUMENTS_STORAGE_KEY = "dvepl_order_documents";
 export const ORDER_DOCUMENTS_CHANGED_EVENT = "dvepl_order_documents_changed";
 
 /**
@@ -53,7 +52,8 @@ export function normalizeCategoryName(name: string): string {
 
 /**
  * Retrieves the current configured order document categories
- * Checks store.settings first, then localStorage, then fallback to defaults.
+ * Reads from the backend company settings (via store.settings) so it applies
+ * company-wide; falls back to defaults when nothing has been configured yet.
  */
 export function getOrderDocumentCategories(settings?: any): DocumentCategoryDef[] {
   if (
@@ -64,31 +64,16 @@ export function getOrderDocumentCategories(settings?: any): DocumentCategoryDef[
     return settings.orderDocuments;
   }
 
-  try {
-    const local = localStorage.getItem(ORDER_DOCUMENTS_STORAGE_KEY);
-    if (local) {
-      const parsed = JSON.parse(local);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.error("Failed to parse order documents from localStorage:", e);
-  }
-
   return INITIAL_DOCUMENT_CATEGORIES;
 }
 
 /**
- * Directly fetch latest document categories from backend database and sync store/storage
+ * Directly fetch latest document categories from backend database and sync store
  */
 export async function fetchOrderDocumentCategories(): Promise<DocumentCategoryDef[]> {
   try {
     const data = await securityApi.settings.read();
     if (data?.orderDocuments && Array.isArray(data.orderDocuments) && data.orderDocuments.length > 0) {
-      try {
-        localStorage.setItem(ORDER_DOCUMENTS_STORAGE_KEY, JSON.stringify(data.orderDocuments));
-      } catch {}
       useERPStore.setState((prev) => ({
         settings: { ...prev.settings, ...data },
       }));
@@ -104,24 +89,14 @@ export async function fetchOrderDocumentCategories(): Promise<DocumentCategoryDe
 }
 
 /**
- * Persists document categories to backend company settings & localStorage,
- * and notifies all active listeners in the application.
+ * Persists document categories to backend company settings
+ * and notifies all active listeners in the application. Stored company-wide,
+ * never in local browser storage.
  */
 export async function saveOrderDocumentCategories(
   categories: DocumentCategoryDef[],
   updateSettingsFn?: (payload: any) => Promise<void>
 ): Promise<void> {
-  // 1. Save to localStorage for instant local update
-  try {
-    localStorage.setItem(
-      ORDER_DOCUMENTS_STORAGE_KEY,
-      JSON.stringify(categories)
-    );
-  } catch (e) {
-    console.error("Failed to save order documents to localStorage:", e);
-  }
-
-  // 2. Save to database settings via updateSettingsFn or directly via securityApi
   try {
     if (updateSettingsFn) {
       await updateSettingsFn({ orderDocuments: categories });
@@ -136,7 +111,7 @@ export async function saveOrderDocumentCategories(
     throw e;
   }
 
-  // 3. Dispatch global event for instant UI sync across open components
+  // Dispatch global event for instant UI sync across open components
   window.dispatchEvent(
     new CustomEvent(ORDER_DOCUMENTS_CHANGED_EVENT, { detail: categories })
   );

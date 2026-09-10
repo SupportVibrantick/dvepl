@@ -23,7 +23,6 @@ const PERMISSION_CODE_MODULE_MAP: Record<string, string> = {
   employeeDocument: 'documents',
   task: 'tasks',
   customer: 'customers',
-  contact: 'contacts',
   communication: 'communication',
   salesOrder: 'orders',
   order: 'orders',

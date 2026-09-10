@@ -71,15 +71,114 @@ export default function Sidebar({
     return key;
   };
 
+  const isItemActive = React.useCallback(
+    (itemPath?: string) => {
+      if (!itemPath) return false;
+
+      const currentPath = location.pathname;
+
+      // Exact match (ignoring trailing slashes)
+      const normCurrent = currentPath.replace(/\/+$/, '') || '/';
+      const normItem = itemPath.replace(/\/+$/, '') || '/';
+
+      if (normCurrent === normItem) return true;
+
+      // Dashboard special handling
+      if (normItem === '/' || normItem === '/dashboard') {
+        return normCurrent === '/' || normCurrent === '/dashboard';
+      }
+
+      // Related aliases & subpaths for Order / Tender Orders
+      if (normItem === '/tender/orders') {
+        return (
+          normCurrent.startsWith('/tender/orders') ||
+          normCurrent.startsWith('/orders')
+        );
+      }
+
+      // Accounts / costing sheet
+      if (normItem === '/accounts') {
+        return (
+          normCurrent.startsWith('/accounts') ||
+          normCurrent.startsWith('/accounts-preview')
+        );
+      }
+
+      // Engineering Drawings / Export orders
+      if (normItem === '/export-orders') {
+        return (
+          normCurrent.startsWith('/export-orders') ||
+          normCurrent.startsWith('/drawings-preview')
+        );
+      }
+
+      // Purchase orders & requests
+      if (normItem === '/purchase/orders') {
+        return (
+          normCurrent.startsWith('/purchase/orders') ||
+          normCurrent.startsWith('/purchase/requests')
+        );
+      }
+
+      // Logistics delivery & dispatches
+      if (normItem === '/logistics/delivery') {
+        return (
+          normCurrent.startsWith('/logistics/delivery') ||
+          normCurrent.startsWith('/logistics/dispatches')
+        );
+      }
+
+      // Inventory stocks, warehouses, transfers
+      if (normItem === '/inventory/stocks') {
+        return normCurrent.startsWith('/inventory');
+      }
+
+      // Settings and its sub-pages (e.g. notifications)
+      if (normItem === '/settings') {
+        if (
+          normCurrent.startsWith('/settings/custom-fields') ||
+          normCurrent.startsWith('/settings/recycle-bin')
+        ) {
+          return false;
+        }
+        return normCurrent.startsWith('/settings');
+      }
+
+      // Standard hierarchical sub-path (e.g. /hrms/employees/123 -> /hrms/employees)
+      if (normCurrent.startsWith(normItem + '/')) {
+        return true;
+      }
+
+      return false;
+    },
+    [location.pathname],
+  );
+
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
-  >({});
+  >(() => {
+    try {
+      const saved = localStorage.getItem('dvepl_sidebar_expanded_sections');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {};
+  });
 
   const toggleSection = (secName: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [secName]: !prev[secName],
-    }));
+    setExpandedSections((prev) => {
+      const current = prev[secName] !== undefined ? prev[secName] : true;
+      const next = {
+        ...prev,
+        [secName]: !current,
+      };
+      try {
+        localStorage.setItem(
+          'dvepl_sidebar_expanded_sections',
+          JSON.stringify(next),
+        );
+      } catch (e) {}
+      return next;
+    });
   };
 
   const currentUser = store.users.find(
@@ -118,7 +217,6 @@ export default function Sidebar({
       tasks: 'tasks',
 
       customers: 'customers',
-      contact_persons: 'contacts',
       communication_history: 'communication',
       orders: 'orders',
 
@@ -145,6 +243,7 @@ export default function Sidebar({
       custom_fields: 'custom_fields',
       recycle_bin: 'recycle_bin',
       settings: 'settings',
+      profile: 'profile',
       export_orders: 'export_orders',
       engineering_drawing: 'export_orders',
     };
@@ -159,6 +258,29 @@ export default function Sidebar({
       return currentUser.pageAccess.includes(key);
     });
   }, [currentUser, sidebarItems]);
+
+  // Auto-expand the section containing the active item
+  React.useEffect(() => {
+    const activeItem = visibleSidebarItems.find((item) =>
+      isItemActive(item.path),
+    );
+    if (activeItem?.section) {
+      setExpandedSections((prev) => {
+        if (prev[activeItem.section!] === true) return prev;
+        const next = {
+          ...prev,
+          [activeItem.section!]: true,
+        };
+        try {
+          localStorage.setItem(
+            'dvepl_sidebar_expanded_sections',
+            JSON.stringify(next),
+          );
+        } catch (e) {}
+        return next;
+      });
+    }
+  }, [location.pathname, visibleSidebarItems, isItemActive]);
 
   // ---------------------------------------------------------
   // Sections
@@ -233,7 +355,7 @@ export default function Sidebar({
             {visibleSidebarItems
               .filter((i) => !i.section)
               .map((item) => {
-                const active = location.pathname === item.path;
+                const active = isItemActive(item.path);
 
                 return (
                   <Link
@@ -245,7 +367,7 @@ export default function Sidebar({
                         : 'gap-3 px-3 py-2'
                     } ${
                       active
-                        ? 'bg-primary/10 text-primary border-l-2 border-primary font-semibold shadow-xs'
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm shadow-primary/25'
                         : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5'
                     }`}
                     title={item.name}
@@ -263,7 +385,13 @@ export default function Sidebar({
           {/* Sections */}
           {sections.map((secName) => {
             const isSectionExpanded =
-              !!expandedSections[secName];
+              expandedSections[secName] !== undefined
+                ? expandedSections[secName]
+                : true;
+
+            const hasActiveChild = visibleSidebarItems.some(
+              (i) => i.section === secName && isItemActive(i.path),
+            );
 
             return (
               <div
@@ -273,9 +401,18 @@ export default function Sidebar({
                 {!isCollapsed && (
                   <button
                     onClick={() => toggleSection(secName)}
-                    className="w-full flex items-center justify-between text-sm font-bold text-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground hover:bg-muted/30 rounded-lg transition-colors group cursor-pointer"
+                    className={`w-full flex items-center justify-between text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors group cursor-pointer ${
+                      hasActiveChild
+                        ? 'text-primary font-extrabold'
+                        : 'text-foreground/70 hover:text-foreground hover:bg-muted/30'
+                    }`}
                   >
-                    <span>{t(secName)}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span>{t(secName)}</span>
+                      {hasActiveChild && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                      )}
+                    </span>
 
                     <ChevronDown
                       className={`h-3 w-3 transition-transform duration-200 ${
@@ -321,8 +458,7 @@ export default function Sidebar({
                           (i) => i.section === secName,
                         )
                         .map((item) => {
-                          const active =
-                            location.pathname === item.path;
+                          const active = isItemActive(item.path);
 
                           return (
                             <Link
@@ -334,7 +470,7 @@ export default function Sidebar({
                                   : 'gap-3 px-3 py-2'
                               } ${
                                 active
-                                  ? 'bg-primary/10 text-primary border-l-2 border-primary font-semibold shadow-xs'
+                                  ? 'bg-primary text-primary-foreground font-semibold shadow-sm shadow-primary/25'
                                   : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5'
                               }`}
                               title={item.name}
@@ -440,30 +576,39 @@ export default function Sidebar({
                   <div className="space-y-1">
                     {visibleSidebarItems
                       .filter((i) => !i.section)
-                      .map((item) => (
-                        <Link
-                          key={item.name}
-                          to={item.path || '#'}
-                          onClick={() =>
-                            onMobileOpenChange(false)
-                          }
-                          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                            location.pathname === item.path
-                              ? 'bg-primary/10 text-primary border-l-2 border-primary font-semibold'
-                              : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5'
-                          }`}
-                        >
-                          <item.icon className="h-4.5 w-4.5" />
+                      .map((item) => {
+                        const active = isItemActive(item.path);
+                        return (
+                          <Link
+                            key={item.name}
+                            to={item.path || '#'}
+                            onClick={() =>
+                              onMobileOpenChange(false)
+                            }
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                              active
+                                ? 'bg-primary text-primary-foreground font-semibold shadow-sm shadow-primary/25'
+                                : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5'
+                            }`}
+                          >
+                            <item.icon className="h-4.5 w-4.5" />
 
-                          <span>{t(item.name)}</span>
-                        </Link>
-                      ))}
+                            <span>{t(item.name)}</span>
+                          </Link>
+                        );
+                      })}
                   </div>
 
                   {/* Sections */}
                   {sections.map((secName) => {
                     const isSectionExpanded =
-                      !!expandedSections[secName];
+                      expandedSections[secName] !== undefined
+                        ? expandedSections[secName]
+                        : true;
+
+                    const hasActiveChild = visibleSidebarItems.some(
+                      (i) => i.section === secName && isItemActive(i.path),
+                    );
 
                     return (
                       <div
@@ -474,9 +619,18 @@ export default function Sidebar({
                           onClick={() =>
                             toggleSection(secName)
                           }
-                          className="w-full flex items-center justify-between text-sm font-bold text-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground hover:bg-muted/30 rounded-lg transition-colors group cursor-pointer"
+                          className={`w-full flex items-center justify-between text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors group cursor-pointer ${
+                            hasActiveChild
+                              ? 'text-primary font-extrabold'
+                              : 'text-foreground/70 hover:text-foreground hover:bg-muted/30'
+                          }`}
                         >
-                          <span>{t(secName)}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span>{t(secName)}</span>
+                            {hasActiveChild && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                            )}
+                          </span>
 
                           <ChevronDown
                             className={`h-3 w-3 transition-transform duration-200 ${
@@ -513,29 +667,31 @@ export default function Sidebar({
                                   (i) =>
                                     i.section === secName,
                                 )
-                                .map((item) => (
-                                  <Link
-                                    key={item.name}
-                                    to={item.path || '#'}
-                                    onClick={() =>
-                                      onMobileOpenChange(
-                                        false,
-                                      )
-                                    }
-                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                                      location.pathname ===
-                                      item.path
-                                        ? 'bg-primary/10 text-primary border-l-2 border-primary font-semibold'
-                                        : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5'
-                                    }`}
-                                  >
-                                    <item.icon className="h-4.5 w-4.5" />
+                                .map((item) => {
+                                  const active = isItemActive(item.path);
+                                  return (
+                                    <Link
+                                      key={item.name}
+                                      to={item.path || '#'}
+                                      onClick={() =>
+                                        onMobileOpenChange(
+                                          false,
+                                        )
+                                      }
+                                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                                        active
+                                          ? 'bg-primary text-primary-foreground font-semibold shadow-sm shadow-primary/25'
+                                          : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5'
+                                      }`}
+                                    >
+                                      <item.icon className="h-4.5 w-4.5" />
 
-                                    <span>
-                                      {t(item.name)}
-                                    </span>
-                                  </Link>
-                                ))}
+                                      <span>
+                                        {t(item.name)}
+                                      </span>
+                                    </Link>
+                                  );
+                                })}
                             </motion.div>
                           )}
                         </AnimatePresence>

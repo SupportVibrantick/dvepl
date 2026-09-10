@@ -12,7 +12,6 @@ import {
   Clock,
   DollarSign,
   Handshake,
-  Contact,
   MessageSquare,
   // FolderGit2,
   ShieldCheck,
@@ -130,12 +129,6 @@ export const sidebarItems: SidebarItem[] = [
     name: "Customers",
     icon: Handshake,
     path: ROUTES.CRM_CUSTOMERS,
-    section: "CRM",
-  },
-  {
-    name: "Contact Persons",
-    icon: Contact,
-    path: ROUTES.CRM_CONTACTS,
     section: "CRM",
   },
   {
