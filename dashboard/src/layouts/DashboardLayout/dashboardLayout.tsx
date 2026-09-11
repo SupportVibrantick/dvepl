@@ -230,7 +230,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       'documents': 'documents',
       'tasks': 'tasks',
       'customers': 'customers',
-      'contact_persons': 'contacts',
       'communication_history': 'communication',
       'orders': 'orders',
       'delivery': 'delivery',

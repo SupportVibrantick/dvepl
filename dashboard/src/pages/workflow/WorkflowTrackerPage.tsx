@@ -18,6 +18,8 @@ import {
   FileSpreadsheet,
   Layers,
   Users,
+  RotateCcw,
+  Loader2,
 } from "lucide-react";
 import {
   DndContext,
@@ -58,6 +60,11 @@ import workflowApi, {
 import { useERPStore } from "@/store/erpStore";
 import { canPerformPageAction } from "@/utils/pagePermissions";
 import { canWorkOnOrder } from "@/utils/salesOrderAccess";
+import {
+  WORKFLOW_REDIRECT_OPTIONS,
+  parseStageRoutes,
+  serializeStageRoutes,
+} from "@/hooks/useWorkflowTemplate";
 
 interface StageDef {
   value: string;
@@ -1373,12 +1380,36 @@ interface DraftStep {
   key: string;
   name: string;
   color: string;
-  isFinal: boolean;
+  targetPage?: string;
+  isFinal?: boolean;
+}
+
+const STAGE_RANDOM_COLORS = [
+  "#3b82f6",
+  "#0284c7",
+  "#06b6d4",
+  "#10b981",
+  "#22c55e",
+  "#f59e0b",
+  "#f97316",
+  "#ef4444",
+  "#8b5cf6",
+  "#a855f7",
+  "#ec4899",
+  "#64748b",
+];
+
+function getRandomStageColor(index?: number) {
+  if (typeof index === "number") {
+    return STAGE_RANDOM_COLORS[index % STAGE_RANDOM_COLORS.length];
+  }
+  return STAGE_RANDOM_COLORS[Math.floor(Math.random() * STAGE_RANDOM_COLORS.length)];
 }
 
 interface SortableStageRowProps {
   step: DraftStep;
   index: number;
+  totalSteps: number;
   updateStep: (index: number, patch: Partial<DraftStep>) => void;
   removeStep: (index: number) => void;
 }
@@ -1386,6 +1417,7 @@ interface SortableStageRowProps {
 function SortableStageRow({
   step,
   index,
+  totalSteps,
   updateStep,
   removeStep,
 }: SortableStageRowProps) {
@@ -1401,7 +1433,7 @@ function SortableStageRow({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0.5 : 1,
     position: "relative",
     zIndex: isDragging ? 50 : undefined,
   };
@@ -1410,57 +1442,75 @@ function SortableStageRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-3xs transition-colors duration-200 ${
-        isDragging ? "border-emerald-500/50 bg-emerald-500/[0.02]" : "hover:border-border/80"
+      className={`group flex items-center gap-2.5 rounded-xl border border-border/80 bg-card px-3 py-2.5 shadow-3xs transition-all duration-150 ${
+        isDragging
+          ? "border-primary/50 bg-primary/[0.03] shadow-md"
+          : "hover:border-border hover:shadow-xs"
       }`}
     >
+      {/* Drag Handle on Left */}
       <span
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing p-1.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors touch-none shrink-0"
+        className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-foreground rounded-md hover:bg-muted transition-colors touch-none shrink-0"
+        title="Drag to reorder"
       >
-        <GripVertical className="h-4 w-4" />
+        <GripVertical className="size-4" />
       </span>
 
-      <input
-        type="color"
-        value={step.color}
-        onChange={(e) => updateStep(index, { color: e.target.value })}
-        className="h-8 w-9 shrink-0 cursor-pointer rounded border border-border bg-card p-0.5"
-        aria-label={`Color for ${step.name}`}
-      />
+      {/* Step Sequence Badge with Color Indicator */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span
+          className="size-2 rounded-full shrink-0"
+          style={{ backgroundColor: step.color || FALLBACK_COLOR }}
+        />
+        <span className="size-6 rounded-lg bg-muted text-muted-foreground font-bold text-[11px] flex items-center justify-center border border-border/50">
+          {index + 1}
+        </span>
+      </div>
 
+      {/* Stage Name Input */}
       <Input
         value={step.name}
         onChange={(e) => updateStep(index, { name: e.target.value })}
-        placeholder="Stage name"
-        className="h-8 flex-1 text-xs"
+        placeholder="Enter stage name..."
+        className="h-8 flex-1 min-w-[130px] text-xs font-semibold rounded-lg bg-muted/20 focus-visible:bg-background border-border/80"
       />
 
-      <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[10px] font-medium text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={step.isFinal}
-          onChange={(e) =>
-            updateStep(index, { isFinal: e.target.checked })
-          }
-          className="h-3.5 w-3.5 accent-emerald-600"
-        />
-        Final
-      </label>
+      {/* Redirection Page Selector */}
+      <div className="shrink-0">
+        <select
+          value={step.targetPage || ""}
+          onChange={(e) => updateStep(index, { targetPage: e.target.value })}
+          className="h-8 text-[11px] font-medium rounded-lg border border-border/80 bg-muted/30 px-2 text-foreground focus:bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer transition-colors"
+          title="Redirect to page on click"
+        >
+          {WORKFLOW_REDIRECT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
+      {/* Delete Stage on Right */}
       <button
         type="button"
         onClick={() => removeStep(index)}
-        className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+        disabled={totalSteps <= 1}
+        title={
+          totalSteps <= 1
+            ? "At least one stage is required"
+            : `Remove "${step.name || "Stage"}"`
+        }
+        className="shrink-0 p-1.5 rounded-lg text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
         aria-label={`Remove ${step.name}`}
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 className="size-3.5" />
       </button>
     </div>
   );
 }
-
 
 function TemplateEditorDialog({
   open,
@@ -1502,6 +1552,7 @@ function TemplateEditorDialog({
   useEffect(() => {
     if (!open) return;
     setName(template?.name || "Default Order Workflow");
+    const routes = parseStageRoutes(template?.description);
     const base: WorkflowTemplateStep[] = template?.steps?.length
       ? template.steps
       : DEFAULT_STAGES.map((s, i) => ({
@@ -1510,17 +1561,18 @@ function TemplateEditorDialog({
           name: s.label,
           color: s.color,
           position: i,
-          isFinal: s.isFinal,
+          isFinal: i === DEFAULT_STAGES.length - 1,
           isActive: true,
         }));
     setSteps(
       base
         .filter((s) => s.isActive)
         .sort((a, b) => a.position - b.position)
-        .map((s) => ({
+        .map((s, idx) => ({
           key: s.key,
           name: s.name,
-          color: s.color || FALLBACK_COLOR,
+          color: s.color || getRandomStageColor(idx),
+          targetPage: routes[s.key] ?? routes[s.key.toUpperCase()] ?? "",
           isFinal: s.isFinal,
         })),
     );
@@ -1532,29 +1584,37 @@ function TemplateEditorDialog({
     );
   };
 
-  const move = (index: number, dir: -1 | 1) => {
-    setSteps((prev) => {
-      const next = [...prev];
-      const target = index + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  };
-
   const addStep = () => {
+    const newIdx = steps.length + 1;
     setSteps((prev) => [
       ...prev,
       {
-        key: `STAGE_${prev.length + 1}`,
-        name: `New Stage ${prev.length + 1}`,
-        color: FALLBACK_COLOR,
-        isFinal: false,
+        key: `STAGE_${Date.now()}`,
+        name: `New Stage ${newIdx}`,
+        color: getRandomStageColor(prev.length),
+        targetPage: "",
       },
     ]);
   };
 
+  const resetToDefault = () => {
+    const defaultRoutes = parseStageRoutes(null);
+    setSteps(
+      DEFAULT_STAGES.map((s, idx) => ({
+        key: s.value,
+        name: s.label,
+        color: s.color || getRandomStageColor(idx),
+        targetPage: defaultRoutes[s.value] || "",
+      })),
+    );
+    toast.success("Stages reset to default workflow sequence.");
+  };
+
   const removeStep = (index: number) => {
+    if (steps.length <= 1) {
+      toast.error("At least one stage is required.");
+      return;
+    }
     setSteps((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -1566,25 +1626,52 @@ function TemplateEditorDialog({
       toast.error("At least one workflow stage is required.");
       return;
     }
-    await onSave(cleaned, { name: name.trim(), description: template?.description });
+
+    const stageRoutes: Record<string, string> = {};
+    cleaned.forEach((s) => {
+      if (s.targetPage) {
+        stageRoutes[s.key] = s.targetPage;
+      }
+    });
+    const serializedDesc = serializeStageRoutes(
+      stageRoutes,
+      template?.description,
+    );
+
+    await onSave(cleaned, {
+      name: name.trim(),
+      description: serializedDesc,
+    });
   };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
-      <DialogContent className="overflow-hidden rounded-xl p-0 sm:max-w-2xl">
-        <DialogHeader className="border-b bg-muted/30 px-6 py-4">
-          <DialogTitle className="text-base font-bold">
-            Workflow Stages
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Define the stages of your order workflow. Rename, reorder, add or
-            remove stages — existing orders are mapped to their nearest
-            remaining stage automatically.
-          </DialogDescription>
+      <DialogContent className="overflow-hidden rounded-2xl p-0 sm:max-w-xl border shadow-2xl">
+        {/* Header */}
+        <DialogHeader className="border-b bg-muted/20 px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20">
+                <Layers className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Workflow Stages
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Configure and sequence stages for order workflow tracking
+                </DialogDescription>
+              </div>
+            </div>
+            <span className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+              {steps.length} {steps.length === 1 ? "Stage" : "Stages"}
+            </span>
+          </div>
         </DialogHeader>
 
-        <div className="max-h-[60vh] space-y-4 overflow-y-auto p-6">
-          <div className="space-y-1">
+        <div className="max-h-[65vh] space-y-4 overflow-y-auto p-6">
+          {/* Template Name */}
+          <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-muted-foreground">
               Template Name
             </Label>
@@ -1592,26 +1679,39 @@ function TemplateEditorDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Default Order Workflow"
-              className="h-9 text-xs"
+              className="h-9 text-xs rounded-xl"
             />
           </div>
 
+          {/* Stages List Controls */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-muted-foreground">
-                Stages (in order)
+            <div className="flex items-center justify-between pt-1">
+              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Pipeline Stages ({steps.length})
               </Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addStep}
-                className="h-8 gap-1 rounded-lg text-xs font-semibold"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Stage
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetToDefault}
+                  className="h-7 text-[11px] font-semibold text-muted-foreground hover:text-foreground gap-1 px-2 cursor-pointer"
+                >
+                  <RotateCcw className="size-3" /> Reset Default
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addStep}
+                  className="h-7 text-[11px] font-semibold gap-1 px-2.5 rounded-lg cursor-pointer"
+                >
+                  <Plus className="size-3.5" /> Add Stage
+                </Button>
+              </div>
             </div>
 
+            {/* Draggable Stages */}
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -1627,6 +1727,7 @@ function TemplateEditorDialog({
                       key={step.key}
                       step={step}
                       index={index}
+                      totalSteps={steps.length}
                       updateStep={updateStep}
                       removeStep={removeStep}
                     />
@@ -1635,29 +1736,50 @@ function TemplateEditorDialog({
               </SortableContext>
             </DndContext>
 
+            {/* Add Stage Bottom Dashed Button */}
+            <button
+              type="button"
+              onClick={addStep}
+              className="w-full py-2.5 rounded-xl border-2 border-dashed border-border/80 text-xs font-semibold text-muted-foreground hover:text-primary hover:border-primary/50 hover:bg-primary/[0.02] flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            >
+              <Plus className="size-4" /> Add Next Stage
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t bg-muted/30 px-6 py-4">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-            className="h-9 rounded-lg text-xs font-semibold"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void handleSave()}
-            disabled={saving}
-            className="h-9 rounded-lg text-xs font-bold"
-          >
-            {saving ? "Saving..." : "Save Stages"}
-          </Button>
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t bg-muted/20 px-6 py-3.5">
+          <p className="text-xs text-muted-foreground font-medium hidden sm:block">
+            Drag handle to reorder stages
+          </p>
+          <div className="flex items-center gap-2 ml-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+              className="h-9 rounded-xl text-xs font-semibold px-4 cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className="h-9 rounded-xl text-xs font-bold px-5 gap-1.5 cursor-pointer"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Stages"
+              )}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

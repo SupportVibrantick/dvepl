@@ -50,6 +50,7 @@ async function adminSalesOrderCreateRoutes(
           dveplCode,
           status,
           orderTakenById,
+          orderTakenByUserIds,
           partyName,
           caNo,
           contactDetails,
@@ -131,6 +132,54 @@ async function adminSalesOrderCreateRoutes(
               success: false,
               message: "Order Taken By user does not belong to this company.",
             });
+          }
+        }
+
+        // ==========================
+        // Multiple Order Taken By Users Validation
+        // ==========================
+
+        const takenByUserIds = Array.from(
+          new Set(
+            [
+              ...(orderTakenById ? [orderTakenById] : []),
+              ...(Array.isArray(orderTakenByUserIds)
+                ? orderTakenByUserIds
+                : []),
+            ].filter(Boolean),
+          ),
+        );
+
+        if (takenByUserIds.length > 0) {
+          const users = await fastify.prisma.user.findMany({
+            where: {
+              id: { in: takenByUserIds },
+            },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              companyId: true,
+              isActive: true,
+              deletedAt: true,
+            },
+          });
+
+          const validIds = new Set(users.map((u) => u.id));
+          for (const uid of takenByUserIds) {
+            const user = users.find((u) => u.id === uid);
+            if (!user || !validIds.has(uid) || !user.isActive || user.deletedAt) {
+              return reply.status(404).send({
+                success: false,
+                message: "Order Taken By user not found or inactive.",
+              });
+            }
+            if (user.companyId !== companyId) {
+              return reply.status(400).send({
+                success: false,
+                message: "Order Taken By user does not belong to this company.",
+              });
+            }
           }
         }
 
@@ -262,6 +311,19 @@ async function adminSalesOrderCreateRoutes(
           }
 
           // ==========================
+          // Create Multiple Order Taken By Users
+          // ==========================
+
+          if (takenByUserIds.length > 0) {
+            await tx.salesOrderTakenBy.createMany({
+              data: takenByUserIds.map((userId) => ({
+                salesOrderId: salesOrder.id,
+                userId,
+              })),
+            });
+          }
+
+          // ==========================
           // Save EAV Custom Fields
           // ==========================
 
@@ -302,6 +364,18 @@ async function adminSalesOrderCreateRoutes(
                   id: true,
                   name: true,
                   email: true,
+                },
+              },
+
+              takenByUsers: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                    },
+                  },
                 },
               },
 

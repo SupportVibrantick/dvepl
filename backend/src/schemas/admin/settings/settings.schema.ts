@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const settingsSchema = z.object({
   orderFields: z.array(z.any()).optional(),
+  addOrderFormFields: z.record(z.string(), z.boolean()).optional(),
+  orderStageRequirements: z.record(z.string(), z.boolean()).optional(),
   orderDocuments: z.array(z.object({
     id: z.string().optional(),
     name: z.string().min(1, "Document name is required"),

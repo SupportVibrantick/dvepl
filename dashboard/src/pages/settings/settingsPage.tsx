@@ -679,7 +679,6 @@ export function SettingsPage() {
 
     // CRM
     { key: "customers", label: "🤝 Customers" },
-    { key: "contacts", label: "📇 Contact Persons" },
     { key: "communication", label: "💬 Communication" },
     { key: "orders", label: "🛒 Orders" },
     { key: "delivery", label: "🚚 Delivery" },

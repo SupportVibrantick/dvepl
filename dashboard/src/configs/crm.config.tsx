@@ -4,7 +4,6 @@ import { sortableHeader } from '@/components/tables/genericTable';
 import { crmApi } from '@/services/modules';
 import { 
   Customer, 
-  ContactPerson, 
   CommunicationHistory 
 } from '@/types/erp';
 
@@ -85,50 +84,6 @@ export const customersConfig = {
     { label: 'Government Accounts', value: data.filter(c => c.isGovernment).length },
     { label: 'Private Accounts', value: data.filter(c => !c.isGovernment).length }
   ]
-};
-
-// ==========================================
-// 14. CONTACT PERSON ROUTE CONFIG
-// ==========================================
-export const contactsConfig = {
-  api: crmApi.contacts,
-  selectOptions: { customerId: crmApi.customers.list },
-  tableName: 'contactPersons',
-  moduleName: 'Contact Person',
-  pluralName: 'Contact Persons',
-  zodSchema: z.object({
-    customerId: z.string().min(1, 'Select a customer account'),
-    name: z.string().min(2, 'Name must be at least 2 characters'),
-    designation: z.string().optional().nullable(),
-    phone: z.string().optional().nullable(),
-    email: z.string().optional().nullable(),
-    isPrimary: z.boolean().default(false)
-  }),
-  defaultFormValues: { customerId: 'cust-1', name: '', designation: '', phone: '', email: '', isPrimary: false },
-  breadcrumbs: [{ label: 'Dashboard', href: '/' }, { label: 'Contact Directory' }],
-  columns: [
-    { accessorKey: 'name', header: sortableHeader('Full Name') },
-    { accessorKey: 'designation', header: 'Designation' },
-    { accessorKey: 'phone', header: 'Phone' },
-    { accessorKey: 'email', header: 'Email' },
-    { 
-      accessorKey: 'isPrimary', 
-      header: 'Primary Contact',
-      cell: ({ getValue }) => getValue() ? '★ Yes' : '—'
-    }
-  ] as ColumnDef<ContactPerson>[],
-  fields: [
-    { name: 'customerId', label: 'Link Customer Account', type: 'select', options: [
-      { label: 'Indian Railways (CR)', value: 'cust-1' },
-      { label: 'Larsen & Toubro Ltd', value: 'cust-2' },
-      { label: 'ONGC', value: 'cust-3' }
-    ], required: true },
-    { name: 'name', label: 'Contact Name', type: 'text', placeholder: 'Mr. Vikram Aditya', required: true },
-    { name: 'designation', label: 'Job Title / Role', type: 'text', placeholder: 'Senior Supply Chain Manager' },
-    { name: 'phone', label: 'Phone Number', type: 'text', placeholder: '+91 99999 00000' },
-    { name: 'email', label: 'Email Address', type: 'text', placeholder: 'vikram@company.com' },
-    { name: 'isPrimary', label: 'Primary Contact Representative', type: 'checkbox' }
-  ] as any[]
 };
 
 // ==========================================

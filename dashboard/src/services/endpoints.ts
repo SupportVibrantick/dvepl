@@ -116,13 +116,6 @@ export const API_ENDPOINTS = {
       remove: (id: string) => `/lead/delete/${id}`,
     },
 
-    contacts: {
-      list: "/contact/read/",
-      create: "/contact/create/",
-      update: (id: string) => `/contact/update/${id}`,
-      remove: (id: string) => `/contact/delete/${id}`,
-    },
-
     communications: {
       list: "/communication/read/",
       create: "/communication/create/",

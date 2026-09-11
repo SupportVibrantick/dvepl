@@ -23,7 +23,6 @@ export const ROUTES = {
 
   // CRM
   CRM_CUSTOMERS: '/crm/customers',
-  CRM_CONTACTS: '/crm/contacts',
   CRM_COMMUNICATION: '/crm/communication',
 
   // Tender

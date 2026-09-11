@@ -39,7 +39,6 @@ const TABLE_NAME_TO_MODULE: Record<string, string> = {
   salaries: "payroll",
   employeeDocuments: "documents",
   customers: "customers",
-  contactPersons: "contacts",
   communicationHistories: "communication",
   salesOrders: "orders",
   vendors: "vendors",

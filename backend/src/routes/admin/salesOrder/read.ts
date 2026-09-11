@@ -102,6 +102,18 @@ async function adminSalesOrderReadRoutes(
                 },
               },
 
+              takenByUsers: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+
               createdBy: {
                 select: {
                   id: true,

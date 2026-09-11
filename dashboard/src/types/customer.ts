@@ -5,6 +5,5 @@ export {
 
 export type {
   Customer,
-  ContactPerson,
   CommunicationHistory
 } from './erp';
