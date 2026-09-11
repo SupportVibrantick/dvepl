@@ -1942,27 +1942,29 @@ export function PurchaseOrdersPage() {
         <DialogContent className="max-w-3xl h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-primary"><History className="size-5" /> Revision History</DialogTitle>
-            <p className="text-xs text-muted-foreground">All saved purchase order revisions across every vendor.</p>
+            <p className="text-xs text-muted-foreground">
+              {activePoRevisions.length > 0
+                ? `Saved revisions for ${activePoRevisions[0].poNumber} (${vendors.find((v) => v.id === activePoRevisions[0].vendorId)?.name || "Unknown vendor"}).`
+                : "No PO selected yet — open a PO to see its revision history."}
+            </p>
           </DialogHeader>
           {(() => {
-            const sorted = [...revisions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            const latestByPo = new Map<string, number>();
-            sorted.forEach((r) => { if (!latestByPo.has(r.poNumber)) latestByPo.set(r.poNumber, r.revisionNo); });
+            const scoped = [...activePoRevisions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             const q = revisionSearch.trim().toLowerCase();
-            const filtered = q ? sorted.filter((r) => {
+            const filtered = q ? scoped.filter((r) => {
               const vName = vendors.find((v) => v.id === r.vendorId)?.name || "";
               return [r.poNumber, r.referenceCode, r.poStatus, vName].some((s) => String(s || "").toLowerCase().includes(q));
-            }) : sorted;
+            }) : scoped;
             return (
               <>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl border bg-card px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Total POs</div>
-                    <div className="text-xl font-bold">{new Set(revisions.map((r) => r.poNumber)).size}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">PO</div>
+                    <div className="text-xl font-bold">{new Set(scoped.map((r) => r.poNumber)).size > 0 ? new Set(scoped.map((r) => r.poNumber)).size : "—"}</div>
                   </div>
                   <div className="rounded-xl border bg-card px-4 py-3">
                     <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Revisions</div>
-                    <div className="text-xl font-bold text-primary">{revisions.length}</div>
+                    <div className="text-xl font-bold text-primary">{scoped.length}</div>
                   </div>
                   <div className="rounded-xl border bg-card px-4 py-3">
                     <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Shown</div>
@@ -1976,7 +1978,7 @@ export function PurchaseOrdersPage() {
                 <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2.5">
                   {filtered.map((rev) => {
                     const revVendor = vendors.find((v) => v.id === rev.vendorId);
-                    const isLatest = latestByPo.get(rev.poNumber) === rev.revisionNo;
+                    const isLatest = scoped.length > 0 && rev.id === (scoped.reduce((max, r) => (r.revisionNo > max.revisionNo ? r : max), scoped[0])).id;
                     const statusChip = String(rev.poStatus || "").toLowerCase();
                     const chipCls = statusChip.includes("cancel") ? "bg-rose-500/10 text-rose-600 border-rose-500/25"
                       : statusChip.includes("place") || statusChip.includes("order") || statusChip.includes("sent") ? "bg-blue-500/10 text-blue-600 border-blue-500/25"
@@ -2046,7 +2048,7 @@ export function PurchaseOrdersPage() {
                   {filtered.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-14 text-center">
                       <div className="text-3xl mb-2">📂</div>
-                      <p className="text-xs text-muted-foreground">{q ? "No revisions match your search." : "No revisions found. Create a PO to get started."}</p>
+                      <p className="text-xs text-muted-foreground">{q ? "No revisions match your search." : "No revisions found for the selected PO yet."}</p>
                     </div>
                   )}
                 </div>

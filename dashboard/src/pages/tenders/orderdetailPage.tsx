@@ -784,11 +784,18 @@ export function OrderDetailPage() {
                              (keyUpper.includes("VENDOR") && !nameLower.includes("drawing")));
 
                           // Drawing stage: specifically for drawings, ensuring vendor/PO stages are NOT misidentified as drawing stages
-                          const isDrawingStage =
+                           const isDrawingStage =
                             !isAccountsStage &&
                             !isVendorStage &&
                             (nameLower.includes("drawing") ||
                              (keyUpper.includes("DRAWING") && !nameLower.includes("vendor") && !nameLower.includes("po")));
+
+                          const isPoReadyStage = s.key === "PO_READY";
+                          const poReadyDone =
+                            isPoReadyStage &&
+                            (stageCurrent ||
+                             tender.poStatus === "Ready" ||
+                             tender.poStatus === "Approved");
 
                           const stageUsers = (tender.assignments || []).filter(
                             (a) =>
@@ -815,9 +822,9 @@ export function OrderDetailPage() {
                                   ? "cursor-pointer hover:border-primary/50 hover:bg-primary/[0.015]"
                                   : ""
                               } ${
-                                stageCurrent
+                                stageCurrent && !poReadyDone
                                   ? "border-blue-500/40 ring-1 ring-blue-500/20 bg-blue-500/[0.02]"
-                                  : stageCompleted
+                                  : stageCompleted || poReadyDone
                                     ? "border-emerald-500/30 bg-emerald-500/[0.01]"
                                     : "border-border/80 hover:border-border"
                               }`}
@@ -832,10 +839,10 @@ export function OrderDetailPage() {
                                         ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
                                         : isDrawingStage
                                           ? "bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
-                                          : stageCurrent
-                                            ? "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400"
-                                            : stageCompleted
-                                              ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                          : (stageCompleted || poReadyDone)
+                                            ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                            : stageCurrent
+                                              ? "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400"
                                               : "bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400"
                                   }`}
                                 >
@@ -848,9 +855,9 @@ export function OrderDetailPage() {
                                     {/* Small status dot indicator */}
                                     <span
                                       className={`size-2 rounded-full shrink-0 ${
-                                        stageCurrent
+                                        stageCurrent && !poReadyDone
                                           ? "bg-blue-600 dark:bg-blue-400 animate-pulse"
-                                          : stageCompleted
+                                          : stageCompleted || poReadyDone
                                             ? "bg-emerald-500"
                                             : "bg-muted-foreground/40"
                                       }`}
@@ -963,14 +970,14 @@ export function OrderDetailPage() {
                                 {/* Status Pill Badge */}
                                 <span
                                   className={`inline-flex items-center justify-center font-bold text-[10px] tracking-wider uppercase px-3 py-1 rounded-full border ${
-                                    stageCompleted
+                                    stageCompleted || poReadyDone
                                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                                       : stageCurrent
                                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
                                         : "bg-muted text-muted-foreground border-border/80"
                                   }`}
                                 >
-                                  {stageCompleted
+                                  {stageCompleted || poReadyDone
                                     ? "Completed"
                                     : stageCurrent
                                       ? "In Progress"
