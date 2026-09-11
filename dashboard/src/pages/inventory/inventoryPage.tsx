@@ -20,6 +20,7 @@ import {
 
 import { cn, getFieldLabel } from "@/utils/helpers";
 import { Button } from "@/components/ui/button";
+import { BackToOrderWorkflowButton } from "@/components/shared/backToOrderWorkflowButton";
 import {
   Dialog,
   DialogContent,
@@ -860,6 +861,7 @@ export default function InventoryPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <BackToOrderWorkflowButton />
           {canExport && (
             <Button variant="outline" onClick={handleExportExcel}>
               <Download className="mr-2 h-4 w-4" />

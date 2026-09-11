@@ -654,7 +654,7 @@ export function AccountsPage() {
             type="button"
             onClick={() => {
               if (currentOrderId) {
-                navigate(`/orders/${currentOrderId}`);
+                navigate(`/orders/${currentOrderId}?tab=workflow`);
               } else {
                 navigate("/tender/orders");
               }
@@ -662,7 +662,7 @@ export function AccountsPage() {
             className="inline-flex items-center gap-1 text-xs md:text-sm font-semibold text-foreground hover:text-primary transition-colors mb-2 group cursor-pointer"
           >
             <ChevronLeft className="size-4 group-hover:-translate-x-0.5 transition-transform text-foreground" />
-            <span>Back to order</span>
+            <span>Back to Order Workflow</span>
           </button>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

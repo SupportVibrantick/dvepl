@@ -12,7 +12,6 @@ import {
   Minimize2,
   Circle,
   Clock3,
-  ChevronRight,
   MoreVertical,
   ShieldCheck,
   Cpu,
@@ -814,7 +813,9 @@ export function OrderDetailPage() {
                               key={s.key}
                               onClick={() => {
                                 if (redirectInfo?.url) {
-                                  navigate(redirectInfo.url);
+                                  navigate(
+                                    `${redirectInfo.url}${redirectInfo.url.includes("?") ? "&" : "?"}backToOrder=${tender.id}`,
+                                  );
                                 }
                               }}
                               className={`group relative flex items-center justify-between gap-3 sm:gap-4 rounded-2xl border bg-card p-3.5 sm:p-4 transition-all duration-200 shadow-xs hover:shadow-md ${
@@ -953,20 +954,6 @@ export function OrderDetailPage() {
                                 className="flex items-center gap-2 sm:gap-3 shrink-0"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {redirectInfo?.url && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => navigate(redirectInfo.url)}
-                                    className="h-7 text-xs font-semibold rounded-lg gap-1.5 border-border/80 text-foreground bg-muted/20 hover:bg-muted cursor-pointer shadow-3xs"
-                                    title={redirectInfo.label}
-                                  >
-                                    <ExternalLink className="size-3.5" />
-                                    <span className="hidden sm:inline">{redirectInfo.label}</span>
-                                    <ChevronRight className="size-3" />
-                                  </Button>
-                                )}
-
                                 {/* Status Pill Badge */}
                                 <span
                                   className={`inline-flex items-center justify-center font-bold text-[10px] tracking-wider uppercase px-3 py-1 rounded-full border ${

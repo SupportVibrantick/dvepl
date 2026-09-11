@@ -10,6 +10,7 @@ import FilterPanel from "./components/FilterPanel";
 import OrdersTable from "./components/OrdersTable";
 import DrawingUploader from "./components/DrawingUploader";
 import DrawingLibrary from "./components/DrawingLibrary";
+import { BackToOrderWorkflowButton } from "@/components/shared/backToOrderWorkflowButton";
 
 export interface Filters {
   soNo: string;
@@ -216,6 +217,7 @@ export default function ExportOrdersPage() {
 
         {/* Top Actions */}
         <div className="flex items-center gap-2">
+          <BackToOrderWorkflowButton />
           <Button
             variant="outline"
             size="sm"

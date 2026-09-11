@@ -33,6 +33,7 @@ import { tenderApi, inventoryApi } from "@/services/modules";
 
 import { apiClient } from "@/services/axios";
 import { useERPStore } from "@/store/erpStore";
+import { BackToOrderWorkflowButton } from "@/components/shared/backToOrderWorkflowButton";
 import { DynamicFormRenderer } from "@/components/customFields/dynamicFormRenderer";
 import {
   useDynamicCustomFields,
@@ -913,14 +914,17 @@ export function VendorsPage() {
             </p>
           </div>
         </div>
-        {canCreate && (
-          <Button
-            onClick={() => setIsFormOpen(true)}
-            className="gap-2 bg-primary text-white font-semibold"
-          >
-            + Add Vendor
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <BackToOrderWorkflowButton />
+          {canCreate && (
+            <Button
+              onClick={() => setIsFormOpen(true)}
+              className="gap-2 bg-primary text-white font-semibold"
+            >
+              + Add Vendor
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* ── Linked Order / PO Banner ── */}
