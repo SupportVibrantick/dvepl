@@ -375,6 +375,13 @@ export function DashboardOverview() {
     null,
   );
 
+  const currentUserId = useERPStore((s) => s.currentUserId);
+  const storeUsers = useERPStore((s) => s.users);
+  const readyUser = useMemo(
+    () => storeUsers.find((u) => u.id === currentUserId) || null,
+    [storeUsers, currentUserId],
+  );
+
   // ============================================================
   // LOAD DASHBOARD DATA
   // ============================================================
@@ -479,8 +486,10 @@ export function DashboardOverview() {
   };
 
   useEffect(() => {
+    if (!readyUser) return;
     void loadDashboard();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyUser]);
 
   // ============================================================
   // CLEAN DATA

@@ -7,16 +7,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Plus,
   Trash2,
   FileText,
-  AlertCircle,
   RotateCcw,
   Check,
   Loader2,
-  Info,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useERPStore } from "@/store/erpStore";
@@ -42,7 +39,6 @@ export function ManageOrderDocumentsModal({
   const store = useERPStore();
   const [list, setList] = useState<DocumentCategoryDef[]>([]);
   const [newDocName, setNewDocName] = useState("");
-  const [newDocMandatory, setNewDocMandatory] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Sync list when modal opens
@@ -50,17 +46,8 @@ export function ManageOrderDocumentsModal({
     if (open) {
       setList(initialCategories.map((c) => ({ ...c })));
       setNewDocName("");
-      setNewDocMandatory(false);
     }
   }, [open, initialCategories]);
-
-  const handleToggleMandatory = (index: number) => {
-    setList((prev) =>
-      prev.map((item, idx) =>
-        idx === index ? { ...item, isMandatory: !item.isMandatory } : item
-      )
-    );
-  };
 
   const handleUpdateName = (index: number, name: string) => {
     setList((prev) =>
@@ -91,12 +78,11 @@ export function ManageOrderDocumentsModal({
       ...prev,
       {
         name: trimmed,
-        isMandatory: newDocMandatory,
+        isMandatory: false,
         description: "",
       },
     ]);
     setNewDocName("");
-    setNewDocMandatory(false);
   };
 
   const handleResetToDefaults = () => {
@@ -144,7 +130,7 @@ export function ManageOrderDocumentsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-card border-border">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-card border border-gray-300 dark:border-gray-700 shadow-2xl">
         {/* Modal Header */}
         <DialogHeader className="px-6 py-4 border-b border-border bg-muted/20">
           <div className="flex items-center justify-between">
@@ -195,13 +181,6 @@ export function ManageOrderDocumentsModal({
                 placeholder="e.g. Tax Invoice Copy, Client Specification Sheet"
                 className="h-9 text-xs rounded-lg flex-1 bg-background"
               />
-              <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer shrink-0 select-none bg-background px-3 py-2 rounded-lg border border-border">
-                <Checkbox
-                  checked={newDocMandatory}
-                  onCheckedChange={(c) => setNewDocMandatory(Boolean(c))}
-                />
-                <span>Mandatory (Required *)</span>
-              </label>
               <Button
                 type="button"
                 size="sm"
@@ -218,7 +197,7 @@ export function ManageOrderDocumentsModal({
             <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold px-1">
               <span>DOCUMENT TITLE ({list.length})</span>
               <div className="flex items-center gap-8">
-                <span className="w-24 text-center">MANDATORY</span>
+                <span className="w-24 text-center">REQUIRED</span>
                 <span className="w-10 text-center">ACTION</span>
               </div>
             </div>
@@ -248,19 +227,15 @@ export function ManageOrderDocumentsModal({
 
                     <div className="flex items-center gap-8 shrink-0">
                       <div className="w-24 flex justify-center">
-                        <label className="flex items-center gap-1.5 text-xs font-medium cursor-pointer select-none">
-                          <Checkbox
-                            checked={item.isMandatory}
-                            onCheckedChange={() => handleToggleMandatory(index)}
-                          />
-                          <span
-                            className={`text-[11px] font-bold ${
-                              item.isMandatory ? "text-red-500" : "text-muted-foreground"
-                            }`}
-                          >
-                            {item.isMandatory ? "Required *" : "Optional"}
-                          </span>
-                        </label>
+                        <span
+                          className={`text-[11px] font-bold ${
+                            item.isMandatory
+                              ? "text-red-500"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.isMandatory ? "Required *" : "Optional"}
+                        </span>
                       </div>
 
                       <div className="w-10 flex justify-center">
@@ -277,16 +252,6 @@ export function ManageOrderDocumentsModal({
                   </div>
                 ))
               )}
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 p-3 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2">
-            <Info className="size-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-semibold">Company-wide Synchronization:</p>
-              <p className="text-[11px] text-blue-800 dark:text-blue-300 leading-relaxed">
-                Changes saved here will immediately apply across the entire company. Documents marked as <strong>Mandatory</strong> will require user upload before any new sales order can be submitted.
-              </p>
             </div>
           </div>
         </div>

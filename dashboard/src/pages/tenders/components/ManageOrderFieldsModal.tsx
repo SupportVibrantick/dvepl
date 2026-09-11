@@ -13,6 +13,7 @@ import {
   RotateCcw,
   ListChecks,
   ShieldCheck,
+  Paperclip,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useERPStore } from "@/store/erpStore";
@@ -27,6 +28,12 @@ import {
   StageDef,
   saveOrderStageRequirements,
 } from "./orderStageRequirementsConfig";
+import {
+  DocumentCategoryDef,
+  INITIAL_DOCUMENT_CATEGORIES,
+  getOrderDocumentCategories,
+  saveOrderDocumentCategories,
+} from "./orderDocumentsConfig";
 
 interface ManageOrderFieldsModalProps {
   open: boolean;
@@ -49,6 +56,9 @@ export function ManageOrderFieldsModal({
   );
   const [stageDraft, setStageDraft] = useState<Record<string, boolean>>({});
   const [stageList, setStageList] = useState<StageDef[]>(DEFAULT_STAGE_ROWS);
+  const [docDraft, setDocDraft] = useState<DocumentCategoryDef[]>(
+    INITIAL_DOCUMENT_CATEGORIES.map((c) => ({ ...c })),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingStages, setIsLoadingStages] = useState(false);
 
@@ -56,6 +66,9 @@ export function ManageOrderFieldsModal({
     if (open) {
       setDraft({ ...fields });
       setStageDraft({ ...(stageRequirements || {}) });
+      setDocDraft(
+        getOrderDocumentCategories(store.settings).map((c) => ({ ...c })),
+      );
       void loadStageList();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,6 +95,8 @@ export function ManageOrderFieldsModal({
       }
     } catch (e) {
       console.error("Failed to load workflow stages:", e);
+    } finally {
+      setIsLoadingStages(false);
     }
     setStageList(DEFAULT_STAGE_ROWS.map((s) => ({ ...s })));
   };
@@ -94,6 +109,14 @@ export function ManageOrderFieldsModal({
     setStageDraft((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handleDocToggle = (index: number) => {
+    setDocDraft((prev) =>
+      prev.map((item, idx) =>
+        idx === index ? { ...item, isMandatory: !item.isMandatory } : item,
+      ),
+    );
+  };
+
   const handleResetToDefaults = () => {
     const defaults = {} as Record<AddOrderFormFieldKey, boolean>;
     for (const field of INITIAL_ADD_ORDER_FORM_FIELDS) {
@@ -101,20 +124,24 @@ export function ManageOrderFieldsModal({
     }
     setDraft(defaults);
     setStageDraft({});
+    setDocDraft(INITIAL_DOCUMENT_CATEGORIES.map((c) => ({ ...c })));
     toast.success("Reset to system default required fields.");
   };
 
   const requiredCount =
     INITIAL_ADD_ORDER_FORM_FIELDS.filter((field) => draft[field.key]).length +
-    Object.values(stageDraft).filter(Boolean).length;
+    Object.values(stageDraft).filter(Boolean).length +
+    docDraft.filter((d) => d.isMandatory).length;
 
-  const totalCount = INITIAL_ADD_ORDER_FORM_FIELDS.length + stageList.length;
+  const totalCount =
+    INITIAL_ADD_ORDER_FORM_FIELDS.length + stageList.length + docDraft.length;
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
       await saveAddOrderFormFieldConfig(draft, store.updateSettings);
       await saveOrderStageRequirements(stageDraft, store.updateSettings);
+      await saveOrderDocumentCategories(docDraft, store.updateSettings);
       toast.success("Order form field requirements saved successfully.");
       onSaved?.(draft);
       onOpenChange(false);
@@ -141,8 +168,9 @@ export function ManageOrderFieldsModal({
                   Order Form Requirements
                 </DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Choose which fields and workflow stages are mandatory in the
-                  "Start New Order" form. Applies company-wide to all users.
+                  Choose which fields, workflow stages, and documents are
+                mandatory in the "Start New Order" form. Applies company-wide
+                to all users.
                 </p>
               </div>
             </div>
@@ -267,6 +295,62 @@ export function ManageOrderFieldsModal({
                   );
                 })
               )}
+            </div>
+          </div>
+
+          {/* ==========================================================
+              DOCUMENT UPLOADS (per-document required control)
+              ========================================================== */}
+          <div className="space-y-2 mt-6">
+            <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold px-1">
+              <div className="flex items-center gap-1.5">
+                <Paperclip className="size-3.5" />
+                <span>DOCUMENT UPLOADS ({docDraft.length})</span>
+              </div>
+              <div className="flex items-center gap-8">
+                <span className="w-24 text-center">REQUIRED *</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground px-1 -mt-1">
+              Mark document uploads as required. Documents marked{" "}
+              <strong className="text-red-500">Required *</strong> must be
+              uploaded before a new sales order can be submitted.
+            </p>
+
+            <div className="divide-y divide-border border border-border rounded-xl bg-card overflow-hidden">
+              {docDraft.map((doc, index) => (
+                <div
+                  key={index}
+                  className="p-3 flex items-center justify-between gap-3 hover:bg-muted/20 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <span className="text-xs font-bold text-muted-foreground/60 w-5">
+                      {index + 1}.
+                    </span>
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      {doc.name}
+                    </span>
+                  </div>
+
+                  <div className="w-24 flex justify-center shrink-0">
+                    <label className="flex items-center gap-1.5 text-xs font-medium cursor-pointer select-none">
+                      <Checkbox
+                        checked={doc.isMandatory}
+                        onCheckedChange={() => handleDocToggle(index)}
+                      />
+                      <span
+                        className={`text-[11px] font-bold ${
+                          doc.isMandatory
+                            ? "text-red-500"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {doc.isMandatory ? "Required *" : "Optional"}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

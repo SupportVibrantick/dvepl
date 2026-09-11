@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   X,
@@ -9,7 +9,6 @@ import {
   Search,
   Check,
   ChevronDown,
-  ExternalLink,
   Settings,
 } from "lucide-react";
 
@@ -43,6 +42,7 @@ import {
 } from "./ProjectDocumentUploadPanel";
 import { ManageOrderDocumentsModal } from "./ManageOrderDocumentsModal";
 import { ManageOrderFieldsModal } from "./ManageOrderFieldsModal";
+import { ManageWorkflowStagesModal } from "./ManageWorkflowStagesModal";
 import {
   getAddOrderFormFieldConfig,
 } from "./addOrderModalFieldsConfig";
@@ -241,6 +241,7 @@ export function AddOrderModal({
   const [allMandatoryDocsUploaded, setAllMandatoryDocsUploaded] = useState(false);
   const [isManageDocsOpen, setIsManageDocsOpen] = useState(false);
   const [isManageFieldsOpen, setIsManageFieldsOpen] = useState(false);
+  const [isManageStagesOpen, setIsManageStagesOpen] = useState(false);
 
   // Admin-controlled required/optional configuration for this form.
   // Admins can edit via ManageOrderFieldsModal; the resolved config applies
@@ -262,15 +263,26 @@ export function AddOrderModal({
       .map((stage) => stage.name);
   }, [stageRows, stageRequirements]);
 
-  const unassignedRequiredStageNames = useMemo(() => {
-    return stageRows
-      .filter((stage) => {
-        if (stageRequirements[stage.key] !== true) return false;
-        const assigned = stageAssignments[stage.key];
-        return !assigned || assigned === "__none__";
-      })
-      .map((stage) => stage.name);
-  }, [stageRows, stageRequirements, stageAssignments]);
+  // Visual shake highlighting for missing required fields / stages / documents
+  const [missingFields, setMissingFields] = useState<Record<string, boolean>>({});
+  const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
+    };
+  }, []);
+
+  const triggerShake = (fields: Record<string, boolean>) => {
+    setMissingFields(fields);
+    if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
+    shakeTimerRef.current = setTimeout(() => setMissingFields({}), 700);
+  };
+
+  const shakeCls = (key: string) =>
+    missingFields[key]
+      ? "border-red-500 ring-1 ring-red-500/70 animate-shake"
+      : "";
 
   const currentUser = useMemo(() => {
     return store.users.find((user) => user.id === store.currentUserId) as any;
@@ -367,6 +379,47 @@ export function AddOrderModal({
   };
 
   // ------------------------------------------------------------
+  // LOAD WORKFLOW TEMPLATE (Job Responsibility stages)
+  // ------------------------------------------------------------
+  const loadStageRows = useCallback(async () => {
+    try {
+      const res = await workflowApi.getTemplate();
+      if (res.data?.success && res.data?.data?.steps) {
+        const steps = res.data.data.steps
+          .filter((s) => s.isActive)
+          .sort((a, b) => a.position - b.position);
+
+        if (steps.length > 0) {
+          const mapped: StageRow[] = steps.map((s) => {
+            // Guess department from step name or fallback
+            let dept = "Costing";
+            const nameLower = s.name.toLowerCase();
+            if (nameLower.includes("account") || nameLower.includes("po")) {
+              dept = "Accounts";
+            } else if (nameLower.includes("draw") || nameLower.includes("design")) {
+              dept = "Design";
+            } else if (nameLower.includes("purchase") || nameLower.includes("vendor")) {
+              dept = "Accounts";
+            } else if (nameLower.includes("production")) {
+              dept = "Production";
+            } else if (nameLower.includes("inventory")) {
+              dept = "Inventory";
+            }
+            return {
+              key: s.key,
+              name: s.name,
+              department: dept,
+            };
+          });
+          setStageRows(mapped);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load workflow template:", err);
+    }
+  }, []);
+
+  // ------------------------------------------------------------
   // LOAD CUSTOMERS, TEAM MEMBERS & WORKFLOW TEMPLATE
   // ------------------------------------------------------------
   useEffect(() => {
@@ -428,54 +481,17 @@ export function AddOrderModal({
     })();
 
     // 3. Fetch Workflow Template Steps
-    const loadWorkflowTemplate = async () => {
-      try {
-        const res = await workflowApi.getTemplate();
-        if (res.data?.success && res.data?.data?.steps) {
-          const steps = res.data.data.steps
-            .filter((s) => s.isActive)
-            .sort((a, b) => a.position - b.position);
-
-          if (steps.length > 0) {
-            const mapped: StageRow[] = steps.map((s) => {
-              // Guess department from step name or fallback
-              let dept = "Costing";
-              const nameLower = s.name.toLowerCase();
-              if (nameLower.includes("account") || nameLower.includes("po")) {
-                dept = "Accounts";
-              } else if (nameLower.includes("draw") || nameLower.includes("design")) {
-                dept = "Design";
-              } else if (nameLower.includes("purchase") || nameLower.includes("vendor")) {
-                dept = "Accounts";
-              } else if (nameLower.includes("production")) {
-                dept = "Production";
-              } else if (nameLower.includes("inventory")) {
-                dept = "Inventory";
-              }
-              return {
-                key: s.key,
-                name: s.name,
-                department: dept,
-              };
-            });
-            setStageRows(mapped);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load workflow template:", err);
-      }
-    };
-    void loadWorkflowTemplate();
+    void loadStageRows();
 
     // Listen for postMessage from workflow stages editor tab or window focus
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "WORKFLOW_STAGES_UPDATED") {
-        void loadWorkflowTemplate();
+        void loadStageRows();
         toast.success("Workflow stages updated.");
       }
     };
     const handleFocus = () => {
-      void loadWorkflowTemplate();
+      void loadStageRows();
     };
 
     window.addEventListener("message", handleMessage);
@@ -484,7 +500,7 @@ export function AddOrderModal({
       window.removeEventListener("message", handleMessage);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [open, store.users]);
+  }, [open, store.users, loadStageRows]);
 
   // ------------------------------------------------------------
   // HANDLE PREFILL ON EDIT
@@ -833,66 +849,101 @@ export function AddOrderModal({
 
     // Required-field validation driven by admin-configured field requirements
     const missingRequired: string[] = [];
-    if (fieldConfig.companyName && !effectiveCompanyName) {
-      missingRequired.push("Customer / Company Name");
-    }
-    if (fieldConfig.dveplCode && !dveplCode.trim()) {
-      missingRequired.push("DVEPL Ref Code");
-    }
-    if (fieldConfig.contactPerson && !contactPerson.trim()) {
-      missingRequired.push("Contact Person");
-    }
-    if (fieldConfig.mobileNo && !mobileNo.trim()) {
-      missingRequired.push("Mobile No");
-    }
-    if (fieldConfig.emailId && !emailId.trim()) {
-      missingRequired.push("Email ID");
-    }
-    if (fieldConfig.billingAddress && !billingAddress.trim()) {
-      missingRequired.push("Billing Address");
-    }
-    if (fieldConfig.shippingAddress) {
-      const shippingValue = sameAsBilling
-        ? billingAddress.trim()
-        : shippingAddress.trim();
-      if (!shippingValue) missingRequired.push("Shipping Address");
-    }
-    if (fieldConfig.orderDate && !orderDate.trim()) {
-      missingRequired.push("Date of Order");
-    }
+    const missingMap: Record<string, boolean> = {};
+    const markMissing = (key: string, isMissing: boolean, label: string) => {
+      if (!isMissing) return;
+      missingRequired.push(label);
+      missingMap[key] = true;
+    };
+
+    markMissing(
+      "companyName",
+      Boolean(fieldConfig.companyName && !effectiveCompanyName),
+      "Customer / Company Name",
+    );
+    markMissing(
+      "dveplCode",
+      Boolean(fieldConfig.dveplCode && !dveplCode.trim()),
+      "DVEPL Ref Code",
+    );
+    markMissing(
+      "contactPerson",
+      Boolean(fieldConfig.contactPerson && !contactPerson.trim()),
+      "Contact Person",
+    );
+    markMissing(
+      "mobileNo",
+      Boolean(fieldConfig.mobileNo && !mobileNo.trim()),
+      "Mobile No",
+    );
+    markMissing(
+      "emailId",
+      Boolean(fieldConfig.emailId && !emailId.trim()),
+      "Email ID",
+    );
+    markMissing(
+      "billingAddress",
+      Boolean(fieldConfig.billingAddress && !billingAddress.trim()),
+      "Billing Address",
+    );
+    markMissing(
+      "shippingAddress",
+      Boolean(
+        fieldConfig.shippingAddress &&
+          (sameAsBilling ? !billingAddress.trim() : !shippingAddress.trim()),
+      ),
+      "Shipping Address",
+    );
+    markMissing(
+      "orderDate",
+      Boolean(fieldConfig.orderDate && !orderDate.trim()),
+      "Date of Order",
+    );
     if (fieldConfig.commitment) {
       if (commitmentType === "fixed" && !commitmentDate.trim()) {
-        missingRequired.push("Date of Commitment (Fixed)");
+        markMissing("commitment", true, "Date of Commitment");
+      } else if (commitmentType === "days" && !commitmentDays.trim()) {
+        markMissing("commitment", true, "Date of Commitment");
       }
-      if (commitmentType === "days" && !commitmentDays.trim()) {
-        missingRequired.push("Date of Commitment (Days)");
+    }
+    markMissing(
+      "customerPoNo",
+      Boolean(fieldConfig.customerPoNo && !customerPoNo.trim()),
+      "Customer PO No",
+    );
+    markMissing(
+      "totalPanels",
+      Boolean(fieldConfig.totalPanels && !totalPanels.trim()),
+      "Total Panels / Units",
+    );
+    markMissing(
+      "advance",
+      Boolean(fieldConfig.advance && !advance.trim()),
+      "Advance",
+    );
+    markMissing(
+      "projectReference",
+      Boolean(fieldConfig.projectReference && !projectReference.trim()),
+      "Project Reference",
+    );
+    markMissing(
+      "orderTakenBy",
+      Boolean(fieldConfig.orderTakenBy && orderTakenByUserIds.length === 0),
+      "Order Taken By / Concerned Person",
+    );
+
+    for (const stage of stageRows) {
+      if (stageRequirements[stage.key] !== true) continue;
+      const assigned = stageAssignments[stage.key];
+      if (!assigned || assigned === "__none__") {
+        missingRequired.push(stage.name);
+        missingMap[`stage:${stage.key}`] = true;
       }
-    }
-    if (fieldConfig.customerPoNo && !customerPoNo.trim()) {
-      missingRequired.push("Customer PO No");
-    }
-    if (fieldConfig.totalPanels && !totalPanels.trim()) {
-      missingRequired.push("Total Panels / Units");
-    }
-    if (fieldConfig.advance && !advance.trim()) {
-      missingRequired.push("Advance");
-    }
-    if (fieldConfig.projectReference && !projectReference.trim()) {
-      missingRequired.push("Project Reference");
-    }
-    if (fieldConfig.orderTakenBy && orderTakenByUserIds.length === 0) {
-      missingRequired.push("Order Taken By / Concerned Person");
-    }
-    if (unassignedRequiredStageNames.length > 0) {
-      missingRequired.push(
-        `Job Responsibility (${unassignedRequiredStageNames.join(", ")})`,
-      );
     }
 
     if (missingRequired.length > 0) {
-      toast.error(
-        `Please fill the required field(s): ${missingRequired.join(", ")}`
-      );
+      triggerShake(missingMap);
+      toast.error("Please complete all required fields before proceeding.");
       return;
     }
 
@@ -908,9 +959,8 @@ export function AddOrderModal({
       });
 
       if (missing.length > 0) {
-        toast.error(
-          `Please upload mandatory document(s): ${missing.map((m) => m.name).join(", ")}`
-        );
+        triggerShake({ docs: true });
+        toast.error("Please upload all mandatory documents before proceeding.");
         return;
       }
     }
@@ -1173,7 +1223,7 @@ export function AddOrderModal({
                     selectedCustomerId
                       ? "border-emerald-600 ring-1 ring-emerald-600 font-medium"
                       : "border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500"
-                  }`}
+                  } ${shakeCls("companyName")}`}
                 />
                 {selectedCustomerId ? (
                   <button
@@ -1240,7 +1290,7 @@ export function AddOrderModal({
                 value={dveplCode}
                 onChange={(e) => setDveplCode(e.target.value)}
                 placeholder="e.g. SO-2026-0001"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500 ${shakeCls("dveplCode")}`}
               />
             </div>
           </div>
@@ -1257,7 +1307,7 @@ export function AddOrderModal({
                 value={contactPerson}
                 onChange={(e) => setContactPerson(e.target.value)}
                 placeholder="Contact person name"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500 ${shakeCls("contactPerson")}`}
               />
             </div>
 
@@ -1269,7 +1319,7 @@ export function AddOrderModal({
                 value={mobileNo}
                 onChange={(e) => setMobileNo(e.target.value)}
                 placeholder="Mobile number"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500 ${shakeCls("mobileNo")}`}
               />
             </div>
 
@@ -1282,7 +1332,7 @@ export function AddOrderModal({
                 value={emailId}
                 onChange={(e) => setEmailId(e.target.value)}
                 placeholder="Email address"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 focus:border-emerald-600 focus:ring-emerald-500 ${shakeCls("emailId")}`}
               />
             </div>
           </div>
@@ -1319,7 +1369,7 @@ export function AddOrderModal({
                     onChange={(e) => setBillingAddress(e.target.value)}
                     placeholder="Enter updated billing address..."
                     rows={2}
-                    className="text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                    className={`text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("billingAddress")}`}
                   />
                 </div>
               )}
@@ -1348,7 +1398,7 @@ export function AddOrderModal({
                   onChange={(e) => setShippingAddress(e.target.value)}
                   placeholder="Enter specific shipping / site delivery address..."
                   rows={2}
-                  className="text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                  className={`text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("shippingAddress")}`}
                 />
               </div>
             )}
@@ -1368,7 +1418,7 @@ export function AddOrderModal({
                   type="date"
                   value={orderDate}
                   onChange={(e) => setOrderDate(e.target.value)}
-                  className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                  className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("orderDate")}`}
                 />
               </div>
             </div>
@@ -1410,7 +1460,7 @@ export function AddOrderModal({
                   type="date"
                   value={commitmentDate}
                   onChange={(e) => setCommitmentDate(e.target.value)}
-                  className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                  className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("commitment")}`}
                 />
               ) : (
                 <div className="space-y-1">
@@ -1420,7 +1470,7 @@ export function AddOrderModal({
                     value={commitmentDays}
                     onChange={(e) => setCommitmentDays(e.target.value)}
                     placeholder="e.g. 30 (days from approval of drawing)"
-                    className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                    className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("commitment")}`}
                   />
                   {calculatedCommitmentDate && (
                     <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
@@ -1440,7 +1490,7 @@ export function AddOrderModal({
                 value={customerPoNo}
                 onChange={(e) => setCustomerPoNo(e.target.value)}
                 placeholder="e.g. CWEAFJ-48/2025"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("customerPoNo")}`}
               />
             </div>
           </div>
@@ -1457,7 +1507,7 @@ export function AddOrderModal({
                 value={totalPanels}
                 onChange={(e) => setTotalPanels(e.target.value)}
                 placeholder="No. of physical panels in this job (not item qty) — enables units-clear"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("totalPanels")}`}
               />
             </div>
 
@@ -1469,7 +1519,7 @@ export function AddOrderModal({
                 value={advance}
                 onChange={(e) => setAdvance(e.target.value)}
                 placeholder="e.g. 20% or ₹50,000"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("advance")}`}
               />
             </div>
 
@@ -1481,7 +1531,7 @@ export function AddOrderModal({
                 value={projectReference}
                 onChange={(e) => setProjectReference(e.target.value)}
                 placeholder="e.g. MES-AF-UDHAMPUR"
-                className="h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700"
+                className={`h-10 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 ${shakeCls("projectReference")}`}
               />
             </div>
           </div>
@@ -1493,7 +1543,7 @@ export function AddOrderModal({
             <label className="text-[11px] font-bold tracking-wider text-neutral-700 dark:text-neutral-300 uppercase block">
               {fieldConfig.orderTakenBy && <span className="text-red-500 font-bold">*</span>} ORDER TAKEN BY / CONCERNED PERSON
             </label>
-            <div className="rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2 max-h-44 overflow-y-auto space-y-1">
+            <div className={`rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2 max-h-44 overflow-y-auto space-y-1 ${shakeCls("orderTakenBy")}`}>
               {teamMembers.length === 0 ? (
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 px-1 py-1">
                   No team members available
@@ -1573,15 +1623,12 @@ export function AddOrderModal({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    window.open("/workflow?stages=true&from=orders", "_blank");
-                  }}
+                  onClick={() => setIsManageStagesOpen(true)}
                   className="shrink-0 h-7 text-[11px] font-semibold gap-1.5 rounded-lg border-blue-200 dark:border-blue-900/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all shadow-3xs"
-                  title="Open Workflow Tracker to manage stages / steps"
+                  title="Manage workflow stages / steps"
                 >
                   <Settings className="size-3" />
                   Manage Stages
-                  <ExternalLink className="size-2.5 opacity-60 ml-0.5" />
                 </Button>
               )}
             </div>
@@ -1619,7 +1666,7 @@ export function AddOrderModal({
                         <SelectTrigger
                           className={`h-8 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 font-normal ${
                             !isAdmin ? "cursor-not-allowed opacity-75 bg-neutral-100/70 dark:bg-neutral-900" : ""
-                          }`}
+                          } ${shakeCls(`stage:${stage.key}`)}`}
                         >
                           <SelectValue placeholder={isAdmin ? "Who's responsible?" : "Unassigned"}>
                             {stageLabel || undefined}
@@ -1648,7 +1695,7 @@ export function AddOrderModal({
           {/* ======================================================
               SECTION: PROJECT DOCUMENT UPLOAD (Matching Screenshot 3)
               ====================================================== */}
-          <div className="pt-2">
+          <div className={`pt-2 ${shakeCls("docs")}`}>
             <ProjectDocumentUploadPanel
               attachments={orderAttachments}
               immediate={Boolean(editingOrder)}
@@ -1692,6 +1739,15 @@ export function AddOrderModal({
               onOpenChange={setIsManageFieldsOpen}
               fields={fieldConfig}
               stageRequirements={stageRequirements}
+            />
+          )}
+
+          {/* Manage Workflow Stages Modal for Admin */}
+          {isAdmin && (
+            <ManageWorkflowStagesModal
+              open={isManageStagesOpen}
+              onOpenChange={setIsManageStagesOpen}
+              onSaved={() => void loadStageRows()}
             />
           )}
 
