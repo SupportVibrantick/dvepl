@@ -25,13 +25,19 @@ function getSalesOrderStatus(statusStr: string): SalesOrderStatus {
 async function quoteTenderOrderReadRoutes(
   fastify: FastifyInstance,
 ) {
-  fastify.get(
+  // This endpoint creates / updates customers and sales orders, so it is a
+  // POST, not a GET, and is guarded like any other create.
+  fastify.post(
     "/",
     {
       schema: {
         tags: ["Quote Tender Order"],
         summary: "Read Orders from Quote Tender Portal",
       },
+      preHandler: [
+        fastify.verifyToken,
+        fastify.authorizePermissions(["order.create"]),
+      ],
     },
     async (
       request: FastifyRequest,

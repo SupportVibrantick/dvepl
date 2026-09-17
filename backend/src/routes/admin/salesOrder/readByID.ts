@@ -36,6 +36,7 @@ async function adminSalesOrderReadByIdRoutes(
           where: {
             id,
             deletedAt: null,
+            companyId: (request as any).user?.companyId,
           },
 
           include: {

@@ -7,12 +7,12 @@ export default defineConfig({
 
   server: {
     port: 5175,
-    host: true, // Optional: allows access from other devices on the network
+    host: true,
   },
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
 });

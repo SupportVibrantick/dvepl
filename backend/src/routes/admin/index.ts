@@ -65,6 +65,7 @@ import workflowRoutes from "./workflow"
 import quoteTenderOrderRoutes from "./quotetender";
 import adminAuditLogRouteGroup from "./auditLog/index";
 import { requestContextStorage } from "../../utils/context";
+import { getModuleForRequest, getRouteWritePermissions } from "../../plugins/authPlugin";
 
 
 async function adminRoutes(
@@ -85,11 +86,13 @@ async function adminRoutes(
       const userAgent = req.headers["user-agent"] || undefined;
       requestContextStorage.enterWith({ userId, ipAddress, userAgent });
 
-      // Read requests (GET/HEAD) are available to any authenticated user. Sensitive
-      // reads (user list, roles, audit logs, access, payroll, etc.) remain protected
-      // by their own route-level authorizePermissions guards. Admin-only notification
-      // management reads and permission-group reads stay gated here. The Admin bypass
-      // in authorizePermissions also applies.
+      // Read requests (GET/HEAD) are available to any authenticated user EXCEPT
+      // module-specific reads, which are gated against the user's page access.
+      // Cross-module "reference reads" used by the UI (attendance loading the
+      // employees list, orders loading customers/vendors, etc.) remain allowed
+      // via the reference-read rules inside authorizePermissions. App-wide
+      // config/utility reads below are intentionally left open to authenticated
+      // users so shared pages can load them regardless of role.
       const method = req.method;
       if (method === "GET" || method === "HEAD") {
         const readUrl = req.url;
@@ -102,6 +105,23 @@ async function adminRoutes(
           readUrl.includes("/access/");
         if (adminOnlyRead) {
           await instance.authorizePermissions(["settings.update"])(req, reply);
+          if (reply.sent) return;
+        }
+        // App-wide reads that must stay available to every authenticated user.
+        if (
+          readUrl.includes("/settings/read") ||
+          readUrl.includes("/dynamic/module") ||
+          readUrl.includes("/upload/") ||
+          readUrl.includes("/workflow/template") ||
+          readUrl.includes("/task/notification/")
+        ) {
+          return;
+        }
+        // Gate every other module read against page access + reference reads.
+        const readModule = getModuleForRequest(readUrl);
+        if (readModule) {
+          await instance.authorizePermissions([])(req, reply);
+          if (reply.sent) return;
         }
         return;
       }
@@ -380,6 +400,13 @@ async function adminRoutes(
       // If we identified specific required permissions, authorize them.
       // authorizePermissions sends a 403 reply when access is denied; stopping
       // here prevents the route handler from replying a second time.
+      if (requiredPermissions.length === 0) {
+        // Fall back to the HTTP verb + module for write routes whose URL
+        // carries no REST keyword (e.g. PATCH /branch/:id, DELETE
+        // /department/:id), so keyword-less URLs can never bypass authorization.
+        requiredPermissions = getRouteWritePermissions(method, url);
+      }
+
       if (requiredPermissions.length > 0) {
         await instance.authorizePermissions(
           requiredPermissions,

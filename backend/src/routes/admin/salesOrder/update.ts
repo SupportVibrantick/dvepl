@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 
 import { adminLogs } from "../../../services/logger/contextLogger";
 import { salesOrderSchema } from "../../../schemas/admin/salesOrder/salesOrder.schema";
+import { isAdminUser } from "../../../utils/orderAccess";
 
 interface Params {
   id: string;
@@ -89,6 +90,7 @@ async function adminSalesOrderUpdateRoutes(
             where: {
               id,
               deletedAt: null,
+              companyId: (request as any).user?.companyId,
             },
           });
 
@@ -102,6 +104,15 @@ async function adminSalesOrderUpdateRoutes(
         // ==========================
         // Company Validation
         // ==========================
+
+        const effectiveCompanyId = (request as any).user?.companyId;
+
+        if (companyId && effectiveCompanyId && companyId !== effectiveCompanyId && !isAdminUser((request as any).admin)) {
+          return reply.status(403).send({
+            success: false,
+            message: "Access denied: cannot move a sales order to another company.",
+          });
+        }
 
         if (companyId) {
           const company =

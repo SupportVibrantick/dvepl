@@ -264,7 +264,7 @@ export function OrdersPage() {
     setIsSyncing(true);
     const syncToast = toast.loading("Syncing orders from portal...");
     try {
-      const response = await apiClient.get("/quotetender/read");
+      const response = await apiClient.post("/quotetender/read");
       if (response.data?.success) {
         const syncedCount = response.data?.syncedCount ?? 0;
         toast.success(`Successfully synced ${syncedCount} new orders!`, {

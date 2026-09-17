@@ -45,6 +45,7 @@ async function adminSalesOrderReadRoutes(
 
         const where: any = {
           deletedAt: null,
+          companyId: (request as any).user?.companyId,
         };
 
         // Search

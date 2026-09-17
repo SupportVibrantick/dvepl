@@ -65,7 +65,7 @@ const moduleFromDynamicUrl = (url: string): string | null => {
   return null;
 };
 
-const getModuleForRequest = (url: string): string | null => {
+export const getModuleForRequest = (url: string): string | null => {
   const dynamicModule = moduleFromDynamicUrl(url);
   if (dynamicModule) return dynamicModule;
 
@@ -160,6 +160,106 @@ const getRequiredAction = (url: string, permissions: string[]): ActionName | nul
   if (permissions.some((permission) => permission.includes(".delete") || permission.includes(".remove"))) return "delete";
   return null;
 };
+
+// Permission prefix used by each page-access module key. This mirrors the
+// keyword-based rules in routes/admin/index.ts but is resolved from the HTTP
+// verb + URL, so writes that reach keyword-less URLs (PATCH /branch/:id,
+// DELETE /department/:id, etc.) still get a permission to authorize.
+const modulePermissionPrefix: Record<string, string> = {
+  companies: "company",
+  branches: "branch",
+  departments: "department",
+  teams: "team",
+  designations: "designation",
+  cost_centers: "costCenter",
+  employees: "employee",
+  shift_management: "shift",
+  attendance: "attendance",
+  leaves: "leave",
+  holidays: "holiday",
+  payroll: "salary",
+  documents: "employeeDocument",
+  tasks: "task",
+  customers: "customer",
+  contacts: "contact",
+  communication: "communication",
+  orders: "order",
+  vendors: "vendor",
+  inventory: "inventory",
+  tender_requests: "tenderRequest",
+  tenders: "tender",
+  technical_clarifications: "technicalClarification",
+  government_departments: "governmentDepartment",
+  sections: "section",
+  divisions: "division",
+  sub_divisions: "subDivision",
+  reference_codes: "referenceCode",
+  users: "user",
+  roles: "role",
+  settings: "settings",
+  recycle_bin: "recycleBin",
+  custom_fields: "customField",
+  finance: "payment",
+  reports: "report",
+  audit_logs: "auditLog",
+  export_orders: "exportOrder",
+  workflow_tracker: "workflow",
+  approval_requests: "approvalRequest",
+};
+
+const writeActionByVerb: Record<string, "create" | "update" | "delete"> = {
+  POST: "create",
+  PUT: "update",
+  PATCH: "update",
+  DELETE: "delete",
+};
+
+// Read access on these modules is a "reference read": a user who has any of the
+// listed business modules (via pageAccess) may also read the module's base data.
+// This mirrors the cross-module lookups the UI performs (e.g. the attendance or
+// orders pages loading the employees list) while keeping every other read tied
+// to the module's own page-access setting.
+const REFERENCE_READS: Record<string, string[]> = {
+  employees: [
+    "attendance", "leaves", "holidays", "shift_management", "payroll", "documents",
+    "tasks", "tenders", "quotations", "orders", "delivery", "communication",
+    "finance", "export_orders",
+  ],
+  customers: [
+    "orders", "quotations", "tenders", "export_orders", "finance", "delivery", "vendors",
+  ],
+  vendors: [
+    "orders", "quotations", "tenders", "inventory", "export_orders", "finance",
+  ],
+  inventory: [
+    "orders", "quotations", "tenders", "export_orders", "finance", "vendors",
+  ],
+  orders: ["finance", "export_orders", "delivery", "tenders", "quotations"],
+  designations: ["employees", "attendance", "leaves", "documents", "payroll", "tasks"],
+  teams: ["employees", "attendance", "leaves", "tasks", "documents"],
+  departments: ["employees", "attendance", "leaves", "documents"],
+  cost_centers: ["employees", "payroll", "attendance", "documents"],
+  shift_management: ["attendance", "employees"],
+};
+
+const hasReferenceReadAccess = (moduleKey: string, pageAccess: string[]): boolean =>
+  pageAccess.some((page) => (REFERENCE_READS[moduleKey] || []).includes(page));
+
+export function getRouteWritePermissions(method: string, url: string): string[] {
+  const action = writeActionByVerb[method];
+  if (!action) return [];
+  // Generic cross-module upload is intentionally reachable by every
+  // authenticated user; the uploaded file only becomes data once it is linked
+  // to a module record, which is authorized on its own endpoint.
+  if (url.includes("/upload/")) return [];
+  // Task notification settings and reminder dispatch are already guarded by
+  // row-level access (canManageTask / admin-only), so don't add page gating on top.
+  if (url.includes("/task/notification/")) return [];
+  const moduleKey = getModuleForRequest(url);
+  const prefix = moduleKey ? modulePermissionPrefix[moduleKey] : undefined;
+  if (!prefix) return [];
+  return [`${prefix}.${action}`];
+}
 
 async function authPlugin(fastify: FastifyInstance) {
   // ==========================
@@ -358,7 +458,22 @@ async function authPlugin(fastify: FastifyInstance) {
             pageAccess.includes("quotations") ||
             pageAccess.includes("export_orders"));
 
-        const hasPageAccess = pageAccess.includes(moduleKey) || hasCustomerAccessForOrders;
+        // Cross-module reference reads (e.g. the attendance page loading the
+        // employees list). Only relaxes read-like requests; writes stay strict.
+        const isReadLike =
+          request.method === "GET" ||
+          request.method === "HEAD" ||
+          !requiredAction;
+        const hasReferenceRead =
+          isReadLike &&
+          (moduleKey === "customers"
+            ? hasCustomerAccessForOrders
+            : hasReferenceReadAccess(moduleKey, pageAccess));
+
+        const hasPageAccess =
+          pageAccess.includes(moduleKey) ||
+          hasCustomerAccessForOrders ||
+          hasReferenceRead;
         const hasActionAccess =
           !requiredAction ||
           hasCustomerAccessForOrders ||

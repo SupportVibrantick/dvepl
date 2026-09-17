@@ -16,7 +16,7 @@ async function updateBranchRoutes(
   fastify: FastifyInstance,
   options: FastifyPluginOptions
 ) {
-  fastify.patch(
+  fastify.patch<{ Params: Params }>(
     "/",
     {
       schema: {
@@ -24,6 +24,10 @@ async function updateBranchRoutes(
         summary: "Update Branch",
         description: "Update an existing branch",
       },
+      preHandler: [
+        fastify.verifyToken,
+        fastify.authorizePermissions(["branch.update"]),
+      ],
     },
 
     async (

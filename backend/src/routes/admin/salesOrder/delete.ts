@@ -50,6 +50,7 @@ async function adminSalesOrderDeleteRoutes(
             where:{
               id,
               deletedAt:null,
+              companyId: (request as any).user?.companyId,
             },
 
           });

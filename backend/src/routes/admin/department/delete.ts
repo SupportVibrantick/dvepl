@@ -15,7 +15,7 @@ async function deleteDepartmentRoutes(
   fastify: FastifyInstance,
   options: FastifyPluginOptions
 ) {
-  fastify.delete(
+  fastify.delete<{ Params: Params }>(
     "/:id",
     {
       schema: {
@@ -23,6 +23,10 @@ async function deleteDepartmentRoutes(
         summary: "Delete Department",
         description: "Soft delete department",
       },
+      preHandler: [
+        fastify.verifyToken,
+        fastify.authorizePermissions(["department.delete"]),
+      ],
     },
 
     async (
