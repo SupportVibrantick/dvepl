@@ -21,6 +21,14 @@ import {
   X,
   XCircle,
   Clock,
+  LogIn,
+  LogOut,
+  UserX,
+  FileUp,
+  FileDown,
+  Send,
+  History,
+  MessageSquare,
 } from 'lucide-react';
 import { securityApi } from '@/services/modules';
 
@@ -31,6 +39,9 @@ const getInitials = (name: string) => {
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
+
+const NEUTRAL_PILL = 'bg-muted text-muted-foreground border-border';
+const NEUTRAL_BANNER = 'bg-muted/40 text-muted-foreground';
 
 const ACTION_STYLES: Record<string, { label: string; pill: string; banner: string; icon: React.ElementType }> = {
   CREATE: {
@@ -51,7 +62,78 @@ const ACTION_STYLES: Record<string, { label: string; pill: string; banner: strin
     banner: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
     icon: Trash2,
   },
+  RESTORE: {
+    label: 'Restored',
+    pill: 'bg-amber-500/10 text-amber-700 border-amber-500/25 dark:text-amber-400',
+    banner: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    icon: RotateCcw,
+  },
+  LOGIN: {
+    label: 'Logged in',
+    pill: 'bg-sky-500/10 text-sky-700 border-sky-500/25 dark:text-sky-400',
+    banner: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
+    icon: LogIn,
+  },
+  LOGIN_FAILED: {
+    label: 'Failed login',
+    pill: 'bg-rose-500/10 text-rose-600 border-rose-500/25 dark:text-rose-400',
+    banner: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    icon: UserX,
+  },
+  LOGOUT: {
+    label: 'Logged out',
+    pill: 'bg-muted text-muted-foreground border-border',
+    banner: 'bg-muted/40 text-muted-foreground',
+    icon: LogOut,
+  },
+  UPLOAD: {
+    label: 'Uploaded',
+    pill: 'bg-violet-500/10 text-violet-700 border-violet-500/25 dark:text-violet-400',
+    banner: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+    icon: FileUp,
+  },
+  BACKUP_EXPORT: {
+    label: 'Backup',
+    pill: 'bg-cyan-500/10 text-cyan-700 border-cyan-500/25 dark:text-cyan-400',
+    banner: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
+    icon: FileDown,
+  },
+  EXPORT: {
+    label: 'Exported',
+    pill: 'bg-cyan-500/10 text-cyan-700 border-cyan-500/25 dark:text-cyan-400',
+    banner: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
+    icon: FileDown,
+  },
+  DISPATCH: {
+    label: 'Dispatched',
+    pill: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/25 dark:text-indigo-400',
+    banner: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
+    icon: Send,
+  },
+  STATUS_CHANGE: {
+    label: 'Status',
+    pill: 'bg-teal-500/10 text-teal-700 border-teal-500/25 dark:text-teal-400',
+    banner: 'bg-teal-500/10 text-teal-700 dark:text-teal-400',
+    icon: History,
+  },
+  FOLLOW_UP: {
+    label: 'Follow up',
+    pill: 'bg-orange-500/10 text-orange-700 border-orange-500/25 dark:text-orange-400',
+    banner: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+    icon: MessageSquare,
+  },
 };
+
+const humanizeAction = (action: string) =>
+  action.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+
+const actionStyle = (action: string) =>
+  ACTION_STYLES[action] ?? {
+    label: humanizeAction(action),
+    pill: NEUTRAL_PILL,
+    banner: NEUTRAL_BANNER,
+    icon: Activity,
+  };
 
 const timeAgo = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();
@@ -88,6 +170,11 @@ const ACTION_TABS = [
   { value: 'CREATE', label: 'Created' },
   { value: 'UPDATE', label: 'Updated' },
   { value: 'DELETE', label: 'Purged' },
+  { value: 'LOGIN', label: 'Login' },
+  { value: 'LOGOUT', label: 'Logout' },
+  { value: 'UPLOAD', label: 'Uploads' },
+  { value: 'EXPORT', label: 'Exports' },
+  { value: 'DISPATCH', label: 'Dispatch' },
 ];
 
 export function AuditLogsPage() {
@@ -409,7 +496,7 @@ export function AuditLogsPage() {
                   </tr>
                 )}
                 {filteredLogs.map((log) => {
-                  const style = ACTION_STYLES[log.action] ?? ACTION_STYLES.UPDATE;
+                  const style = actionStyle(log.action);
                   const selected = log.id === selectedId;
                   return (
                     <tr
@@ -486,7 +573,7 @@ export function AuditLogsPage() {
           {selectedLog ? (
             <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
               {(() => {
-                const style = ACTION_STYLES[selectedLog.action] ?? ACTION_STYLES.UPDATE;
+                const style = actionStyle(selectedLog.action);
                 const ActionIcon = style.icon;
                 const browser = browserFromUA(selectedLog.userAgent);
                 return (
