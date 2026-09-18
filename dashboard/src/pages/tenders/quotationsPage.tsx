@@ -120,7 +120,7 @@ export function QuotationsPage() {
       const [quoList, custList, tenderList, empList] = await Promise.all([
         quotationApi.quotations.list(),
         crmApi.customers.list(),
-        tenderApi.tenders.list(),
+        Promise.resolve([]),
         hrmsApi.employees.list()
       ]);
       setQuotations(quoList);

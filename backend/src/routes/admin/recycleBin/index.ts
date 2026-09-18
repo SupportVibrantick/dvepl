@@ -99,18 +99,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
           where: { orderTakenById: id },
           data: { orderTakenById: null },
         });
-        await fastify.prisma.tender.updateMany({
-          where: { createdById: id },
-          data: { createdById: adminId },
-        });
-        await fastify.prisma.tender.updateMany({
-          where: { assignedToId: id },
-          data: { assignedToId: null },
-        });
-        await fastify.prisma.tenderRequest.updateMany({
-          where: { assignedToId: id },
-          data: { assignedToId: null },
-        });
         await fastify.prisma.purchaseOrder.updateMany({
           where: { createdById: id },
           data: { createdById: adminId },
@@ -481,13 +469,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
     delegate: "tenderActivity",
     select: { id: true, action: true, deletedAt: true },
     formatName: (record) => `Tender Activity${record.action ? ` (${record.action})` : ""}`,
-  },
-  {
-    module: "governmentdepartment",
-    label: "Government Department",
-    delegate: "governmentDepartment",
-    select: { id: true, name: true, code: true, shortName: true, deletedAt: true },
-    formatName: (record) => record.name || record.shortName || record.code || "Government Department",
   },
   {
     module: "tenderrequestactivity",

@@ -46,9 +46,6 @@ const ReportsPage = lazy(() => import("@/pages/reports/reportsPage"));
 
 // CRM
 const CustomersPage = lazy(() => import("@/pages/customers/customersPage"));
-const CommunicationHistoryPage = lazy(
-  () => import("@/pages/communication/communicationHistoryPage"),
-);
 
 // Tender Management
 // NOTE: Lead Management module is parked — its routes render NotFound below.
@@ -168,18 +165,8 @@ export function AppRouter() {
               <Route path="/tasks" element={<TasksPage />} />
               {/* CRM */}
               <Route path="/crm/customers" element={<CustomersPage />} />
-              <Route
-                path="/crm/communication"
-                element={<CommunicationHistoryPage />}
-              />
               <Route path="/tender/orders" element={<OrdersPage />} />
               {/* Tender Management — parked, renders NotFound (pages kept in src/pages/) */}
-              <Route path="/tender/requests" element={<NotFound />} />
-              <Route path="/tender/tenders" element={<NotFound />} />
-              <Route
-                path="/tender/government"
-                element={<NotFound />}
-              />
               <Route path="/tender/sections" element={<NotFound />} />
               <Route path="/tender/divisions" element={<NotFound />} />
               <Route

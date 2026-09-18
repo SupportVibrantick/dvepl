@@ -143,7 +143,7 @@ export function ManageOrderDocumentsModal({
                   Manage Order Document Uploads
                 </DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Configure the list of documents shown when creating orders and mark mandatory ones.
+                  Configure the list of documents shown when creating orders.
                 </p>
               </div>
             </div>
@@ -196,10 +196,7 @@ export function ManageOrderDocumentsModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold px-1">
               <span>DOCUMENT TITLE ({list.length})</span>
-              <div className="flex items-center gap-8">
-                <span className="w-24 text-center">REQUIRED</span>
-                <span className="w-10 text-center">ACTION</span>
-              </div>
+              <span className="w-10 text-center">ACTION</span>
             </div>
 
             <div className="divide-y divide-border border border-border rounded-xl bg-card overflow-hidden">
@@ -225,29 +222,15 @@ export function ManageOrderDocumentsModal({
                       />
                     </div>
 
-                    <div className="flex items-center gap-8 shrink-0">
-                      <div className="w-24 flex justify-center">
-                        <span
-                          className={`text-[11px] font-bold ${
-                            item.isMandatory
-                              ? "text-red-500"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {item.isMandatory ? "Required *" : "Optional"}
-                        </span>
-                      </div>
-
-                      <div className="w-10 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => handleRemove(index)}
-                          className="text-muted-foreground hover:text-red-500 transition-colors p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30"
-                          title="Remove document"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
+                    <div className="w-10 flex justify-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(index)}
+                        className="text-muted-foreground hover:text-red-500 transition-colors p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30"
+                        title="Remove document"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))

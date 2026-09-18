@@ -1,7 +1,5 @@
 import { 
-  Customer, 
-  CommunicationHistory 
+  Customer 
 } from '../types/erp';
 
 export const initialCustomers: Customer[] = [];
-export const initialCommunicationHistories: CommunicationHistory[] = [];

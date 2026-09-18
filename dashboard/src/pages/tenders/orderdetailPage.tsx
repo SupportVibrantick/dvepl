@@ -323,7 +323,7 @@ export function OrderDetailPage() {
     { id: "overview", label: "Overview" },
     { id: "workflow", label: "Workflow" },
     { id: "documents", label: "Documents", count: drawingsCount + attachmentCount },
-    { id: "audit", label: "Communication & Audit" },
+    { id: "audit", label: "Audit" },
   ];
 
   // ============================================================
@@ -792,8 +792,7 @@ export function OrderDetailPage() {
                           const isPoReadyStage = s.key === "PO_READY";
                           const poReadyDone =
                             isPoReadyStage &&
-                            (stageCurrent ||
-                             tender.poStatus === "Ready" ||
+                            (tender.poStatus === "Ready" ||
                              tender.poStatus === "Approved");
 
                           const stageUsers = (tender.assignments || []).filter(
@@ -1085,97 +1084,6 @@ export function OrderDetailPage() {
                 </div>
               )}
 
-              <section className="border-t pt-7">
-                <div className="flex items-center justify-between mb-4">
-                  <DetailSectionTitle title="Assigned Users" color="bg-violet-500" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!isAdmin}
-                    onClick={() => {
-                      if (!isAdmin) return;
-                      setAssigningTender(tender);
-                    }}
-                    title={
-                      isAdmin
-                        ? "Manage Assignments"
-                        : "Only administrators can manage assignments"
-                    }
-                    className="gap-1.5 h-8 text-xs font-bold border-violet-500/20 text-violet-600 dark:text-violet-400 hover:bg-violet-500/5 hover:border-violet-500/40 rounded-xl transition-all duration-200"
-                  >
-                    <UserPlus className="size-3.5" />
-                    Manage Assignments
-                  </Button>
-                </div>
-
-                <div className="rounded-2xl border border-border/80 bg-muted/10 p-4 shadow-3xs">
-                  {tender.assignments && tender.assignments.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {tender.assignments.map((assignment, idx) => (
-                        <div
-                          key={assignment.id || assignment.userId || idx}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-background shadow-3xs"
-                        >
-                          <div className="size-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] uppercase border">
-                            {(assignment.user?.name || "U").charAt(0)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-bold text-xs text-foreground">
-                              {assignment.user?.name ||
-                                "User ID: " + assignment.userId}
-                            </p>
-                            {assignment.user?.email && (
-                              <p className="text-[10px] text-muted-foreground truncate">
-                                {assignment.user.email}
-                              </p>
-                            )}
-                            {assignment.createdAt && (
-                              <p className="text-[9px] text-muted-foreground/80 flex items-center gap-1 mt-0.5">
-                                <Clock3 className="size-2.5 opacity-60" />
-                                <span>Assigned: {formatAssignmentDateTime(assignment.createdAt)}</span>
-                              </p>
-                            )}
-                          </div>
-                          <span
-                            className={`ml-1 inline-flex items-center text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-                              assignment.stage
-                                ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20"
-                                : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"
-                            }`}
-                          >
-                            {assignment.stage
-                              ? workflowStageLabel(assignment.stage, workflowStages)
-                              : "All Stages"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between text-xs text-muted-foreground p-1">
-                      <span className="italic font-medium">
-                        No users are currently assigned to this order.
-                      </span>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={!isAdmin}
-                        onClick={() => {
-                          if (!isAdmin) return;
-                          setAssigningTender(tender);
-                        }}
-                        title={
-                          isAdmin
-                            ? "Assign Users"
-                            : "Only administrators can manage assignments"
-                        }
-                        className="h-8 text-xs font-bold rounded-lg px-3"
-                      >
-                        ＋ Assign Now
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </section>
 
               <section className="border-t pt-7">
                 <DetailSectionTitle

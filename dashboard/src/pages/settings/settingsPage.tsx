@@ -679,7 +679,6 @@ export function SettingsPage() {
 
     // CRM
     { key: "customers", label: "🤝 Customers" },
-    { key: "communication", label: "💬 Communication" },
     { key: "orders", label: "🛒 Orders" },
     { key: "delivery", label: "🚚 Delivery" },
     { key: "vendors", label: "🚚 Vendors" },
@@ -693,11 +692,8 @@ export function SettingsPage() {
     // Sales
     { key: "workflow_tracker", label: "🔄 Workflow Tracker" },
 
-    // Lead Management & Tenders
-    { key: "tender_requests", label: "📂 Tender Requests" },
-    { key: "tenders", label: "🗂️ Tenders" },
+    // Lead Management
     { key: "technical_clarifications", label: "❓ Technical Clarifications" },
-    { key: "government_departments", label: "🏢 Government Departments" },
     { key: "sections", label: "🌿 Sections" },
     { key: "divisions", label: "🌿 Divisions" },
     { key: "sub_divisions", label: "👥 Sub Divisions" },

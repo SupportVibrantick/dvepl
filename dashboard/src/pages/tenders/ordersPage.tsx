@@ -833,16 +833,6 @@ export function OrdersPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => void loadQuoteTenders()}
-          className="gap-2 self-start sm:self-center h-9 shadow-2xs hover:bg-muted/60 transition-colors"
-        >
-          <RefreshCw className="size-3.5" />
-          Refresh
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
           onClick={toggleFullscreen}
           title={isFullscreen ? "Exit Full Screen" : "Enter Full Screen"}
           className="gap-2 self-start sm:self-center h-9 shadow-2xs hover:bg-muted/60 transition-colors"

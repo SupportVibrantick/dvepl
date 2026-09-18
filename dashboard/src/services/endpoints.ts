@@ -115,35 +115,8 @@ export const API_ENDPOINTS = {
       update: (id: string) => `/lead/update/${id}`,
       remove: (id: string) => `/lead/delete/${id}`,
     },
-
-    communications: {
-      list: "/communication/read/",
-      create: "/communication/create/",
-      remove: (id: string) => `/communication/delete/${id}`,
-    },
   },
   tender: {
-    requests: {
-      list: "/tender-request/read/",
-      create: "/tender-request/create/",
-      update: (id: string) => `/tender-request/update/${id}`,
-      remove: (id: string) => `/tender-request/delete/${id}`,
-    },
-
-    tenders: {
-      list: "/tender/read/",
-      create: "/tender/create/",
-      update: (id: string) => `/tender/update/${id}`,
-      remove: (id: string) => `/tender/delete/${id}`,
-    },
-
-    governmentDepartments: {
-      list: "/government-department/read/",
-      create: "/government-department/create/",
-      update: (id: string) => `/government-department/update/${id}`,
-      remove: (id: string) => `/government-department/delete/${id}`,
-    },
-
     sections: {
       list: "/section/read/",
       create: "/section/create/",

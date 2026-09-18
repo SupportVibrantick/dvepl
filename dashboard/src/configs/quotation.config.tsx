@@ -11,7 +11,6 @@ export const quotationsConfig = {
   api: quotationApi.quotations,
   selectOptions: {
     customerId: crmApi.customers.list,
-    tenderId: tenderApi.tenders.list,
     createdById: hrmsApi.employees.list,
     approvedById: hrmsApi.employees.list,
   },

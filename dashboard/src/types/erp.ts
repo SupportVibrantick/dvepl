@@ -37,34 +37,7 @@ export enum CommunicationType {
   NOTE = 'NOTE'
 }
 
-export enum TenderStatus {
-  DRAFT = 'DRAFT',
-  OPEN = 'OPEN',
-  ASSIGNED = 'ASSIGNED',
-  IN_PROGRESS = 'IN_PROGRESS',
-  SUBMITTED = 'SUBMITTED',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
-}
 
-export enum TenderRequestSource {
-  WEBSITE = 'WEBSITE',
-  REFERRAL = 'REFERRAL',
-  EMAIL = 'EMAIL',
-  WHATSAPP = 'WHATSAPP',
-  MANUAL = 'MANUAL'
-}
-
-export enum TenderRequestStatus {
-  NEW = 'NEW',
-  ASSIGNED = 'ASSIGNED',
-  CONTACTED = 'CONTACTED',
-  QUALIFIED = 'QUALIFIED',
-  TENDER = 'TENDER',
-  QUOTATION = 'QUOTATION',
-  WON = 'WON',
-  LOST = 'LOST'
-}
 
 export enum ReferenceCodeAction {
   GENERATED = 'GENERATED',
@@ -491,87 +464,6 @@ export interface CommunicationHistory {
   createdAt: string;
 }
 
-export interface Tender {
-  id: string;
-  companyId: string;
-  tenderRequestId?: string | null;
-  customerId?: string | null;
-  departmentId?: string | null;
-  sectionId?: string | null;
-  divisionId?: string | null;
-  subDivisionId?: string | null;
-  tenderNo?: string | null;
-  tenderCode?: string | null;
-  title: string;
-  description?: string | null;
-  projectLocation?: string | null;
-  estimatedCost?: number | null;
-  publishedAt?: string | null;
-  dueDate?: string | null;
-  status: TenderStatus;
-  createdById: string;
-  assignedToId?: string | null;
-  governmentDepartmentId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string | null;
-}
-
-export interface TenderFile {
-  id: string;
-  tenderId: string;
-  fileName: string;
-  fileUrl: string;
-  fileType?: string | null;
-  uploadedBy?: string | null;
-  createdAt: string;
-}
-
-export interface TenderRemark {
-  id: string;
-  tenderId: string;
-  userId?: string | null;
-  remark: string;
-  createdAt: string;
-}
-
-export interface TenderRequest {
-  id: string;
-  companyId: string;
-  customerId?: string | null;
-  assignedToId?: string | null;
-  createdById?: string | null;
-  source: TenderRequestSource;
-  status: TenderRequestStatus;
-  title: string;
-  description?: string | null;
-  estimatedValue?: number | null;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string | null;
-}
-
-export interface TenderActivity {
-  id: string;
-  tenderId: string;
-  action: string;
-  oldValue?: any;
-  newValue?: any;
-  performedBy?: string | null;
-  createdAt: string;
-}
-
-export interface GovernmentDepartment {
-  id: string;
-  companyId: string;
-  name: string;
-  code?: string | null;
-  shortName?: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface Section {
   id: string;
   companyId: string;
@@ -579,7 +471,6 @@ export interface Section {
   name: string;
   code?: string | null;
   isActive: boolean;
-  governmentDepartmentId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
