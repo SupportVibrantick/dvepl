@@ -177,6 +177,7 @@ export const securityApi = {
   },
   auditLogs: {
     list: () => apiClient.get((API_ENDPOINTS.security as any).auditLogs.list).then(res => res.data.data),
+    create: (module: string, recordId: string, action: string, oldValue?: any, newValue?: any) => apiClient.post((API_ENDPOINTS.security as any).auditLogs.write, { module, recordId, action, oldValue, newValue }).then(res => res.data.data),
   }
 };
 

@@ -263,6 +263,7 @@ export const API_ENDPOINTS = {
     },
     auditLogs: {
       list: '/audit-log/read/',
+      write: '/audit-log/write/',
     },
   },
   workflow: {

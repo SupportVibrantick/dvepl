@@ -143,6 +143,15 @@ export const useERPStore = create<ERPStore>((set) => ({
       createdAt: new Date().toISOString()
     };
     set((state) => ({ auditLogs: [newLog, ...state.auditLogs] }));
+    try {
+      void securityApi.auditLogs.create(module, recordId, action, oldValue, newValue).then((saved) => {
+        if (saved && saved.id) {
+          set((state) => ({ auditLogs: state.auditLogs.map((l) => (l.id === newLog.id ? saved : l)) }));
+        }
+      }).catch(() => {});
+    } catch {
+      // fire-and-forget: local log still shows even if persistence fails
+    }
   },
 
   addRecord: (table, data) => {

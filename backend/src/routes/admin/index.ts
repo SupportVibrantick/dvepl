@@ -55,7 +55,7 @@ import dynamicRoutes from "./dynamic";
 
 import notificationRoutes from "./notification";
 
-import { FastifyInstance, FastifyPluginOptions } from "fastify";
+import { FastifyInstance, FastifyPluginOptions, FastifyRequest } from "fastify";
 
 import adminCustomFieldRouteGroup from "./customField/index";
 import recycleBinRoutes from "./recycleBin/index";
@@ -66,6 +66,71 @@ import quoteTenderOrderRoutes from "./quotetender";
 import adminAuditLogRouteGroup from "./auditLog/index";
 import { requestContextStorage } from "../../utils/context";
 import { getModuleForRequest, getRouteWritePermissions } from "../../plugins/authPlugin";
+import { adminLogs } from "../../services/logger/contextLogger";
+
+
+// Derive a module label from the first URL segment, e.g. "/purchase-order" -> "PurchaseOrder".
+// Skips the API group prefix (admin/api/public) that Fastify keeps in request.url.
+const urlToModule = (url: string): string => {
+  const segments = url.split("?")[0].split("/").filter(Boolean);
+  if (segments.length > 1 && ["admin", "api", "public"].includes(segments[0])) {
+    segments.shift();
+  }
+  const segment = segments[0];
+  if (!segment) return "System";
+  return segment
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+};
+
+// Resolve the audit action from the URL keyword or HTTP method.
+const resolveAuditAction = (method: string, url: string): string => {
+  const path = url.split("?")[0];
+  if (path.includes("/create")) return "CREATE";
+  if (path.includes("/delete")) return "DELETE";
+  if (path.includes("/restore")) return "RESTORE";
+  if (
+    path.includes("/update") ||
+    path.includes("/edit") ||
+    path.includes("/change") ||
+    path.includes("/toggle") ||
+    path.includes("/approve") ||
+    path.includes("/reject") ||
+    method === "PATCH" ||
+    method === "PUT"
+  ) {
+    return "UPDATE";
+  }
+  return method === "DELETE" ? "DELETE" : "CREATE";
+};
+
+// Pull a meaningful record reference from the URL params or the response body.
+const resolveAuditRecordId = (
+  request: FastifyRequest | any,
+  payloadData: any
+): string => {
+  const params = request.params ?? {};
+  const fromParams =
+    params.id ??
+    params.poNo ??
+    params.roleId ??
+    params.vendorId ??
+    params.referenceCode ??
+    "";
+  if (fromParams) return String(fromParams);
+  if (payloadData) {
+    return (
+      payloadData.id ??
+      payloadData.poNo ??
+      payloadData.referenceCode ??
+      payloadData.roleId ??
+      payloadData.vendorId ??
+      ""
+    );
+  }
+  return "";
+};
 
 
 async function adminRoutes(
@@ -412,6 +477,70 @@ async function adminRoutes(
           requiredPermissions,
         )(req, reply);
         if (reply.sent) return;
+      }
+    });
+
+    // ── Automatic audit trail ─────────────────────────────────────────────
+    // Every mutating request that reaches a module route is recorded to the
+    // audit log (module label + record + action + the response payload). It
+    // runs after the route's own auth/authorization have passed, only fires
+    // for write methods, and skips routes that manage the audit log itself,
+    // file uploads, and auth (logins carry tokens we don't want stored).
+    instance.addHook("onSend", async (request: any, reply, payload: any) => {
+      try {
+        const method = request.method as string;
+        if (method === "GET" || method === "HEAD" || typeof payload !== "string") {
+          return payload;
+        }
+        const urlPath = request.url.split("?")[0];
+        if (
+          urlPath.includes("/auth") ||
+          urlPath.includes("/audit-log") ||
+          urlPath.includes("/upload")
+        ) {
+          return payload;
+        }
+        let parsedPayload: any = null;
+        try {
+          parsedPayload = JSON.parse(payload);
+        } catch {
+          return payload;
+        }
+        const module = urlToModule(urlPath);
+        if (!module || module === "System") return payload;
+        const action = resolveAuditAction(method, urlPath);
+        const recordId = resolveAuditRecordId(request, parsedPayload?.data);
+        const context = requestContextStorage.getStore();
+        const finalPayload =
+          parsedPayload && typeof parsedPayload === "object"
+            ? parsedPayload
+            : { raw: parsedPayload };
+
+        setImmediate(async () => {
+          try {
+            await instance.prisma.auditLog.create({
+              data: {
+                userId: request.admin?.id ?? context?.userId ?? null,
+                module,
+                recordId,
+                action,
+                newValue: finalPayload ?? undefined,
+                ipAddress: context?.ipAddress ?? request.ip,
+                userAgent: context?.userAgent ?? request.headers["user-agent"],
+              },
+            });
+          } catch (err) {
+            adminLogs.error("Automatic audit log write failed", {
+              module,
+              action,
+              recordId,
+              error: err,
+            });
+          }
+        });
+        return payload;
+      } catch {
+        return payload;
       }
     });
 

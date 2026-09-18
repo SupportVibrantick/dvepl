@@ -594,6 +594,13 @@ export function AccountsPage() {
       } else {
         toast.success("Costing & account details saved successfully!");
       }
+      useERPStore.getState().addAuditLog(
+        'Order',
+        orderCode || currentOrderId || 'ORD-2026-00265',
+        'UPDATE',
+        null,
+        { orderCode, customer: customerDetails.companyName || customerDetails.contactPerson || '', items: items.length, taxPercent, lessAdvance, grandTotal: items.reduce((sum, it) => sum + (Number(it.total) || 0), 0) },
+      );
     } catch {
       toast.error("Failed to save costing locally.");
     } finally {

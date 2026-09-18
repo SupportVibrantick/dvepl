@@ -5,6 +5,7 @@ import {
   FastifyRequest,
 } from "fastify";
 import { adminLogs } from "../../../services/logger/contextLogger";
+import { enrichAuditLogs } from "./enrich";
 
 async function readAuditLogRoutes(
   fastify: FastifyInstance,
@@ -41,10 +42,12 @@ async function readAuditLogRoutes(
           },
         });
 
+        const enriched = await enrichAuditLogs(logs, fastify.prisma);
+
         return reply.status(200).send({
           success: true,
           message: "Audit logs fetched successfully.",
-          data: logs,
+          data: enriched,
         });
       } catch (error: any) {
         adminLogs.error("Read audit logs failed", { error });
