@@ -531,6 +531,9 @@ export interface AuditLog {
   module: string;
   recordId: string;
   action: string;
+  entityName?: string | null;
+  details?: string | null;
+  status?: string;
   oldValue?: any;
   newValue?: any;
   ipAddress?: string | null;

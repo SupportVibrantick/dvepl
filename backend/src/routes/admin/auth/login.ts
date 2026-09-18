@@ -73,7 +73,10 @@ async function adminLoginRoutes(
             data: {
               module: "Auth",
               recordId: email,
+              entityName: email,
               action: "LOGIN_FAILED",
+              details: `Login failed — ${email}`,
+              status: "FAILED",
               newValue: { email, reason: "Invalid email address" },
               ipAddress: request.ip,
               userAgent: request.headers["user-agent"],
@@ -95,7 +98,10 @@ async function adminLoginRoutes(
             data: {
               module: "Auth",
               recordId: existingUser.name || existingUser.email,
+              entityName: existingUser.name || existingUser.email,
               action: "LOGIN_FAILED",
+              details: `Login failed — invalid password for ${existingUser.name || existingUser.email}`,
+              status: "FAILED",
               newValue: { email: existingUser.email, reason: "Invalid password" },
               ipAddress: request.ip,
               userAgent: request.headers["user-agent"],
@@ -132,7 +138,10 @@ async function adminLoginRoutes(
             userId: existingUser.id,
             module: "Auth",
             recordId: existingUser.name || existingUser.email,
+            entityName: existingUser.name || existingUser.email,
             action: "LOGIN",
+            details: `User logged in — ${existingUser.name || existingUser.email}`,
+            status: "SUCCESS",
             newValue: {
               email: existingUser.email,
               name: existingUser.name,

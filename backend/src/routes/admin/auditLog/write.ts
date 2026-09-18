@@ -51,12 +51,17 @@ async function writeAuditLogRoutes(
       try {
         const { module, recordId, action, oldValue, newValue } =
           request.body as WriteAuditLogBody;
+        const entityName =
+          typeof recordId === "string" && recordId.trim() ? recordId.trim() : null;
         const log = await fastify.prisma.auditLog.create({
           data: {
             userId: (request as any).admin?.id ?? null,
             module,
             recordId,
+            entityName: entityName ?? undefined,
             action,
+            details: `${action} ${module}${entityName ? ` — ${entityName}` : ""}`,
+            status: "SUCCESS",
             oldValue: oldValue ?? undefined,
             newValue: newValue ?? undefined,
             ipAddress: request.ip,

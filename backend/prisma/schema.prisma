@@ -876,18 +876,21 @@ model SubDivision {
 }
 
 model AuditLog {
-  id        String    @id @default(uuid())
-  userId    String?
-  module    String
-  recordId  String
-  action    String
-  oldValue  Json?
-  newValue  Json?
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-  user      User?     @relation(fields: [userId], references: [id])
+  id         String    @id @default(uuid())
+  userId     String?
+  module     String
+  recordId   String
+  action     String
+  entityName String?
+  details    String?
+  status     String    @default("SUCCESS")
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+  user       User?     @relation(fields: [userId], references: [id])
 
   @@index([module, recordId])
   @@map("audit_logs")

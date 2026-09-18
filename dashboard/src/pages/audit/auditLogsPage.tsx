@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  XCircle,
   Clock,
 } from 'lucide-react';
 import { securityApi } from '@/services/modules';
@@ -424,10 +425,15 @@ export function AuditLogsPage() {
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
+                          {log.status === 'FAILED' ? (
+                            <span title="Failed" className="flex size-4 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-500">
+                              <XCircle className="size-3" />
+                            </span>
+                          ) : null}
                           <span className={cn('rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide leading-none', style.pill)}>
                             {style.label}
                           </span>
-                          <span className="max-w-[120px] truncate font-mono text-[11px] text-muted-foreground">#{log.recordId}</span>
+                          <span className="max-w-[180px] truncate text-[11px] text-foreground">{log.details || `${style.label} ${log.module}`}</span>
                         </div>
                       </td>
                       <td className="max-w-[130px] truncate px-3 py-2.5 text-xs font-semibold text-foreground">{log.module}</td>
@@ -487,12 +493,17 @@ export function AuditLogsPage() {
                   <>
                     <div className={cn('flex items-center gap-2 rounded-lg px-3 py-2.5', style.banner)}>
                       <ActionIcon className="size-4 shrink-0" />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold">
-                          {style.label} — {selectedLog.module}
+                          {selectedLog.details || `${style.label} — ${selectedLog.module}`}
                         </p>
                         <p className="truncate font-mono text-[10px] opacity-80">#{selectedLog.recordId}</p>
                       </div>
+                      {selectedLog.status === 'FAILED' ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-500">
+                          <XCircle className="size-3" /> Failed
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="space-y-2 text-[11px] text-muted-foreground">
@@ -503,6 +514,16 @@ export function AuditLogsPage() {
                       <div className="flex items-center justify-between border-b border-border/50 pb-2">
                         <span>Operator</span>
                         <span className="font-semibold text-foreground">{selectedLog.user?.name || selectedLog.userId || 'System'}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                        <span>Module</span>
+                        <span className="font-semibold text-foreground">{selectedLog.module}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                        <span>Status</span>
+                        <span className={cn('font-semibold', selectedLog.status === 'FAILED' ? 'text-rose-500' : 'text-emerald-600')}>
+                          {selectedLog.status === 'FAILED' ? 'Failed' : 'Success'}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between border-b border-border/50 pb-2">
                         <span>IP address</span>

@@ -124,6 +124,51 @@ const resolveAuditRecordId = (
   return "";
 };
 
+// Pick a human-readable display name for the affected record straight from the
+// response body, so deletes and restores keep the name even after the entity
+// is gone (mirrors the reference project's denormalized entityName).
+const resolveAuditEntityName = (payloadData: any): string | null => {
+  if (!payloadData || typeof payloadData !== "object") return null;
+  const candidates = [
+    "entityName",
+    "name",
+    "poNo",
+    "grnNo",
+    "grNo",
+    "paymentNo",
+    "dveplCode",
+    "orderNo",
+    "title",
+    "filename",
+  ];
+  for (const key of candidates) {
+    const value = payloadData[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+};
+
+// Human-readable description, e.g. "Placed PurchaseOrder PO-1234" or
+// "Failed to update Company". Falls back gracefully when no name is available.
+const buildAuditDetails = (
+  action: string,
+  module: string,
+  entityName: string | null,
+  label: string | null,
+  failed: boolean
+): string => {
+  const verb = action.toLowerCase();
+  const subject = entityName || label || module;
+  if (failed) return `Failed to ${verb} ${module}${subject !== module ? ` — ${subject}` : ""}`;
+  const prefix =
+    action === "RESTORE" ? "Restored" :
+    action === "DELETE" ? "Deleted" :
+    verb.startsWith("update") || action === "UPDATE" ? "Updated" :
+    verb.startsWith("create") || action === "CREATE" ? "Created" :
+    action;
+  return `${prefix} ${module}${subject !== module ? ` — ${subject}` : ""}`;
+};
+
 
 async function adminRoutes(
   fastify: FastifyInstance,
@@ -492,12 +537,19 @@ async function adminRoutes(
 
         setImmediate(async () => {
           try {
+            const payloadData = parsedPayload?.data;
+            const entityName = resolveAuditEntityName(payloadData);
+            const failed = reply.statusCode >= 400;
+            const label = entityName ?? (recordId && !/^[0-9a-f-]{36}$/i.test(recordId) ? recordId : null);
             await instance.prisma.auditLog.create({
               data: {
                 userId: request.admin?.id ?? context?.userId ?? null,
                 module,
                 recordId,
                 action,
+                entityName: entityName ?? undefined,
+                details: buildAuditDetails(action, module, entityName, label, failed),
+                status: failed ? "FAILED" : "SUCCESS",
                 newValue: finalPayload ?? undefined,
                 ipAddress: context?.ipAddress ?? request.ip,
                 userAgent: context?.userAgent ?? request.headers["user-agent"],

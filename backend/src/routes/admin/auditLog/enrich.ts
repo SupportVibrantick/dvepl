@@ -120,7 +120,7 @@ export async function enrichAuditLogs(
         log.recordId && idToLabel.get(log.recordId);
       const resolved = {
         ...log,
-        recordId: resolvedRecordId ?? (isUuid(log.recordId) ? "(record no longer exists)" : log.recordId),
+        recordId: resolvedRecordId ?? log.entityName ?? (isUuid(log.recordId) ? "(record no longer exists)" : log.recordId),
         userId: log.userId && idToLabel.get(log.userId) ? idToLabel.get(log.userId) : log.userId,
         oldValue: log.oldValue ? scrubUuids(log.oldValue, idToLabel) : log.oldValue,
         newValue: log.newValue ? scrubUuids(log.newValue, idToLabel) : log.newValue,

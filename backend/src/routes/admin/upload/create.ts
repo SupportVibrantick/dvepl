@@ -63,7 +63,10 @@ async function createUploadRoute(
             userId: (request as any).admin?.id ?? null,
             module: "Upload",
             recordId: fileData.filename,
+            entityName: fileData.filename,
             action: "UPLOAD",
+            details: `Uploaded file — ${fileData.filename}`,
+            status: "SUCCESS",
             newValue: {
               fileName: fileData.filename,
               storedAs: uniqueFilename,
