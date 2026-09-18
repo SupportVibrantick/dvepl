@@ -69,6 +69,16 @@ async function adminLoginRoutes(
         });
 
         if (!existingUser) {
+          await fastify.prisma.auditLog.create({
+            data: {
+              module: "Auth",
+              recordId: email,
+              action: "LOGIN_FAILED",
+              newValue: { email, reason: "Invalid email address" },
+              ipAddress: request.ip,
+              userAgent: request.headers["user-agent"],
+            },
+          }).catch((err) => adminLogs.error("Failed to log login attempt", { error: err }));
           return reply.status(404).send({
             success: false,
             message: "Invalid email address for authentication",
@@ -81,6 +91,16 @@ async function adminLoginRoutes(
         );
 
         if (!isPasswordValid) {
+          await fastify.prisma.auditLog.create({
+            data: {
+              module: "Auth",
+              recordId: existingUser.name || existingUser.email,
+              action: "LOGIN_FAILED",
+              newValue: { email: existingUser.email, reason: "Invalid password" },
+              ipAddress: request.ip,
+              userAgent: request.headers["user-agent"],
+            },
+          }).catch((err) => adminLogs.error("Failed to log failed login", { error: err }));
           return reply.status(403).send({
             success: false,
             message: "Invalid password",
@@ -106,6 +126,22 @@ async function adminLoginRoutes(
           adminId: existingUser.id,
           email: existingUser.email,
         });
+
+        await fastify.prisma.auditLog.create({
+          data: {
+            userId: existingUser.id,
+            module: "Auth",
+            recordId: existingUser.name || existingUser.email,
+            action: "LOGIN",
+            newValue: {
+              email: existingUser.email,
+              name: existingUser.name,
+              roles,
+            },
+            ipAddress: request.ip,
+            userAgent: request.headers["user-agent"],
+          },
+        }).catch((err) => adminLogs.error("Failed to log successful login", { error: err }));
 
         const up = existingUser.accessProfile;
         const mainRole = existingUser.userRoles[0]?.role as any;

@@ -1257,6 +1257,7 @@ export function PurchaseOrdersPage() {
     if (sentChannels.length === 0) return;
     setPoStatus("Placed");
     await handleSavePoRevision("Placed");
+    useERPStore.getState().addAuditLog('PurchaseOrder', poNumber, 'DISPATCH', null, { channel: sentChannels.join(' & '), poNumber, recipient: placePhone.trim() || activePoVendor.email || '', phone: placePhone.trim(), vendor: activePoVendor.name });
     toast.success("PO marked as Placed - sent via " + sentChannels.join(" & "));
     setIsPoPlacedDialogOpen(false);
   };
@@ -1419,6 +1420,7 @@ export function PurchaseOrdersPage() {
     const doc = buildPoPdfDocument();
     if (!doc) { toast.error("Unable to generate PO document."); return; }
     doc.save(`${poNumber || "purchase-order"}.pdf`);
+    useERPStore.getState().addAuditLog('PurchaseOrder', poNumber, 'EXPORT', null, { type: 'PDF', poNumber, vendor: activePoVendor.name, grandTotal: totals.grandTotal });
     toast.success("PO PDF saved to your downloads folder.");
   };
 
@@ -1433,7 +1435,10 @@ export function PurchaseOrdersPage() {
       const subject = `Purchase Order ${poNumber} from ${companyDetails.name}`;
       const emailHtml = `<p>Dear Vendor,</p><p>Please find attached our Purchase Order <strong>${poNumber}</strong> dated ${poDate}.</p><p><strong>Summary:</strong></p><ul><li><strong>Material Status:</strong> ${materialStatus}</li><li><strong>Payment Terms:</strong> ${paymentTerms}</li></ul><p>Best regards,<br>${companyDetails.name}</p>`;
       const res = await securityApi.settings.sendPoEmail({ vendorId: activePoVendor.id, subject, html: emailHtml, pdfBase64: base64Pdf, poNumber });
-      if (res?.success) toast.success(`PO emailed to ${activePoVendor.email}`, { id: emailToast });
+      if (res?.success) {
+        useERPStore.getState().addAuditLog('PurchaseOrder', poNumber, 'DISPATCH', null, { channel: 'Email', poNumber, recipient: activePoVendor.email, vendor: activePoVendor.name });
+        toast.success(`PO emailed to ${activePoVendor.email}`, { id: emailToast });
+      }
       else toast.error(res?.message || "Failed to send PO email.", { id: emailToast });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || err?.message || "Error sending PO email.", { id: emailToast });
@@ -1478,6 +1483,7 @@ export function PurchaseOrdersPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "PO Items");
     XLSX.writeFile(wb, `${poNumber || "purchase-order"}-line-items.xlsx`);
+    useERPStore.getState().addAuditLog('PurchaseOrder', poNumber, 'EXPORT', null, { type: 'Excel', poNumber, items: poItems.length, grandTotal: totals.grandTotal });
     toast.success("PO line items exported to Excel.");
   };
 

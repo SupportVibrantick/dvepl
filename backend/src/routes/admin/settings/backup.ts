@@ -59,12 +59,24 @@ async function backupRestoreRoutes(
           }
         }
 
+        await fastify.prisma.auditLog.create({
+          data: {
+            userId: (request.admin as any)?.id ?? null,
+            module: "Settings",
+            recordId: (request.admin as any)?.email || "settings-backup",
+            action: "BACKUP_EXPORT",
+            newValue: { type: "settings", timestamp: new Date().toISOString() },
+            ipAddress: request.ip,
+            userAgent: request.headers["user-agent"],
+          },
+        }).catch((err) => adminLogs.error("Failed to log backup export", { error: err }));
+
         return reply.status(200).send({
           success: true,
           data: {
             timestamp: new Date().toISOString(),
-            ...settings
-          }
+            ...settings,
+          },
         });
       } catch (error: any) {
         adminLogs.error("Export backup failed", { error });

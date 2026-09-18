@@ -30,6 +30,18 @@ async function adminLogoutRoutes(
           });
         }
 
+        await fastify.prisma.auditLog.create({
+          data: {
+            userId,
+            module: "Auth",
+            recordId: (request.admin as any)?.email || userId,
+            action: "LOGOUT",
+            newValue: { email: (request.admin as any)?.email || null },
+            ipAddress: request.ip,
+            userAgent: request.headers["user-agent"],
+          },
+        }).catch(() => {});
+
         return reply.send({
           success: true,
           message: "Logged out successfully.",

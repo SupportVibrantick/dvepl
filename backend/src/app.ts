@@ -22,6 +22,7 @@ import utilsPlugin from "./plugins/utilsPlugin";
 
 async function buildApp() {
   const fastify = Fastify({
+    trustProxy: true,
     routerOptions: {
       ignoreTrailingSlash: true,
     },

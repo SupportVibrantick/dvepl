@@ -58,6 +58,23 @@ async function createUploadRoute(
           url: relativeUrl,
         });
 
+        await fastify.prisma.auditLog.create({
+          data: {
+            userId: (request as any).admin?.id ?? null,
+            module: "Upload",
+            recordId: fileData.filename,
+            action: "UPLOAD",
+            newValue: {
+              fileName: fileData.filename,
+              storedAs: uniqueFilename,
+              url: relativeUrl,
+              mimeType: fileData.mimetype,
+            },
+            ipAddress: request.ip,
+            userAgent: request.headers["user-agent"],
+          },
+        }).catch((err) => adminLogs.error("Failed to log upload", { error: err }));
+
         return reply.status(201).send({
           success: true,
           message: "File uploaded successfully.",
