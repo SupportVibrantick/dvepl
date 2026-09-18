@@ -66,17 +66,11 @@ export const crmApi = {
     sync: () => apiClient.post(API_ENDPOINTS.crm.customers.sync).then(res => res.data),
   },
 
-  communications: crud(
-    API_ENDPOINTS.crm.communications,
-    { update: false }
-  ),
-
   leads: crud(API_ENDPOINTS.crm.leads),
 };
 
 export const tenderApi = {
-  requests: crud(API_ENDPOINTS.tender.requests), tenders: crud(API_ENDPOINTS.tender.tenders),
-  governmentDepartments: crud(API_ENDPOINTS.tender.governmentDepartments), sections: crud(API_ENDPOINTS.tender.sections),
+  sections: crud(API_ENDPOINTS.tender.sections),
   divisions: crud(API_ENDPOINTS.tender.divisions), subDivisions: crud(API_ENDPOINTS.tender.subDivisions),
   vendors: crud((API_ENDPOINTS.tender as any).vendors, { updateMethod: 'patch' }),
   vendorProducts: {

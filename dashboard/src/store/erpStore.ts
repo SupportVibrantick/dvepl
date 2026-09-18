@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import {
   ReferenceCodeAction, Company, Branch, Department, Team, Designation,
   CostCenter, User, Role, Employee,
-  Attendance, Leave, Salary, Tender, TenderRequest, GovernmentDepartment, Section, Division,
+  Attendance, Leave, Salary, Section, Division,
   SubDivision, ReferenceCode, AuditLog, Holiday, DeliveryOrder
 } from '../types/erp';
 import { securityApi } from '@/services/modules';
@@ -20,12 +20,9 @@ import {
   initialAttendances,
   initialLeaves,
   initialSalaries,
-  initialGovernmentDepartments,
   initialSections,
   initialDivisions,
   initialSubDivisions,
-  initialTenderRequests,
-  initialTenders,
   initialHolidays,
   initialReferenceCodes,
   initialAuditLogs
@@ -46,9 +43,6 @@ interface ERPStore {
   attendances: Attendance[];
   leaves: Leave[];
   salaries: Salary[];
-  tenders: Tender[];
-  tenderRequests: TenderRequest[];
-  governmentDepartments: GovernmentDepartment[];
   sections: Section[];
   divisions: Division[];
   subDivisions: SubDivision[];
@@ -97,9 +91,6 @@ export const useERPStore = create<ERPStore>((set) => ({
   attendances: initialAttendances,
   leaves: initialLeaves,
   salaries: initialSalaries,
-  tenders: initialTenders,
-  tenderRequests: initialTenderRequests,
-  governmentDepartments: initialGovernmentDepartments,
   sections: initialSections,
   divisions: initialDivisions,
   subDivisions: initialSubDivisions,
@@ -167,29 +158,8 @@ export const useERPStore = create<ERPStore>((set) => ({
       const records = state[table] || [];
       const updatedList = [newRecord, ...records];
 
-      // Auto-trigger reference code generator if we are adding a Tender
-      let updatedReferenceCodes = state.referenceCodes;
-      if (table === 'tenders') {
-        const sequence = (state.referenceCodes.length + 1).toString().padStart(4, '0');
-        const code = `REF-${new Date().getFullYear()}-${sequence}`;
-        newRecord.tenderCode = code;
-
-        const newRefCodeRecord: ReferenceCode = {
-          id: `ref-code-${Math.random().toString(36).substr(2, 9)}`,
-          tenderId: id,
-          oldReferenceCode: null,
-          newReferenceCode: code,
-          actionType: ReferenceCodeAction.GENERATED,
-          actionReason: 'Automatic code generation on tender registration',
-          actionBy: state.users.find((u: any) => u.id === state.currentUserId)?.name || 'System',
-          createdAt: new Date().toISOString()
-        };
-        updatedReferenceCodes = [newRefCodeRecord, ...state.referenceCodes];
-      }
-
       return {
-        [table]: updatedList,
-        referenceCodes: updatedReferenceCodes
+        [table]: updatedList
       };
     });
 

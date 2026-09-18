@@ -16,8 +16,7 @@ const SECTIONS_STRUCTURE = [
 export async function seedSectionStructure(
   prisma: PrismaClient,
   companyId: string,
-  departmentId: string,
-  govDeptId: string
+  departmentId: string
 ): Promise<{
   sections: Section[];
   divisions: Division[];
@@ -43,7 +42,6 @@ export async function seedSectionStructure(
           name: item.secName,
           code: item.secCode,
           isActive: true,
-          governmentDepartmentId: govDeptId,
         },
       });
     }

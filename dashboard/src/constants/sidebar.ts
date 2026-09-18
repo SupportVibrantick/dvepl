@@ -137,12 +137,6 @@ export const sidebarItems: SidebarItem[] = [
     path: ROUTES.SECURITY_ROLES,
     section: "HRMS",
   },
-  // {
-  //   name: "Communication History",
-  //   icon: MessageSquare,
-  //   path: ROUTES.CRM_COMMUNICATION,
-  //   section: "CRM",
-  // },
   {
     name: "Orders",
     icon: ShoppingCart,
@@ -199,28 +193,11 @@ export const sidebarItems: SidebarItem[] = [
   },
 
   // Lead Management & Tenders (parked — routes render 404)
-  // {
-  //   name: "Tender Requests",
-  //   icon: FolderOpen,
-  //   path: ROUTES.TENDER_REQUESTS,
-  //   section: "Lead Management",
-  // },
-  // {
-  //   name: "Tenders",
-  //   icon: FolderGit2,
-  //   path: ROUTES.TENDER_TENDERS,
-  //   section: "Lead Management",
-  // },
+
   // {
   //   name: "Technical Clarifications",
   //   icon: HelpCircle,
   //   path: ROUTES.TENDER_CLARIFICATIONS,
-  //   section: "Lead Management",
-  // },
-  // {
-  //   name: "Government Departments",
-  //   icon: Building2,
-  //   path: ROUTES.TENDER_GOVERNMENT,
   //   section: "Lead Management",
   // },
   // {

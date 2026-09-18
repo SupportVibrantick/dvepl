@@ -75,10 +75,9 @@ export const getModuleForRequest = (url: string): string | null => {
     ["/employee/", "employees"], ["/employee-shift/", "shift_management"], ["/attendance/", "attendance"], ["/leave/", "leaves"],
     ["/holiday/", "holidays"], ["/salary/", "payroll"],
     ["/employee-document/", "documents"], ["/task/", "tasks"], ["/customer/", "customers"],
-    ["/contact/", "contacts"], ["/communication/", "communication"], ["/sales-order/", "orders"],
+    ["/contact/", "contacts"], ["/sales-order/", "orders"],
     ["/order/", "orders"], ["/vendor/", "vendors"], ["/inventory/", "inventory"],
-    ["/tender-request/", "tender_requests"], ["/tender/", "tenders"],
-    ["/technical-clarification/", "technical_clarifications"], ["/government-department/", "government_departments"],
+    ["/technical-clarification/", "technical_clarifications"],
     ["/section/", "sections"], ["/division/", "divisions"], ["/sub-division/", "sub_divisions"],
     ["/reference-code/", "reference_codes"], ["/user/", "users"], ["/role/", "roles"],
     ["/settings/", "settings"], ["/recycle-bin/", "recycle_bin"], ["/custom-fields/", "custom_fields"],
@@ -90,8 +89,6 @@ export const getModuleForRequest = (url: string): string | null => {
     ["/employee-contact/", "employees"], ["/employee-emergency-contact/", "employees"],
     ["/employee-education/", "employees"], ["/employee-experience/", "employees"],
     ["/reference-code-counter/", "reference_codes"],
-    ["/tender-request-activity/", "tender_requests"], ["/tender-activity/", "tenders"],
-    ["/tender-file/", "tenders"], ["/tender-remark/", "tenders"],
   ];
   return routeModules.find(([path]) => url.includes(path))?.[1] ?? null;
 };
@@ -118,7 +115,6 @@ const getModuleForPermission = (permissions: string[]): string | null => {
     task: "tasks",
     customer: "customers",
     contact: "contacts",
-    communication: "communication",
     salesOrder: "orders",
     order: "orders",
     vendor: "vendors",
@@ -126,10 +122,7 @@ const getModuleForPermission = (permissions: string[]): string | null => {
     exportOrder: "export_orders",
     workflow: "workflow_tracker",
     payment: "finance",
-    tenderRequest: "tender_requests",
-    tender: "tenders",
     technicalClarification: "technical_clarifications",
-    governmentDepartment: "government_departments",
     section: "sections",
     division: "divisions",
     subDivision: "sub_divisions",
@@ -454,7 +447,6 @@ async function authPlugin(fastify: FastifyInstance) {
         const hasCustomerAccessForOrders =
           isCustomerRead &&
           (pageAccess.includes("orders") ||
-            pageAccess.includes("tenders") ||
             pageAccess.includes("quotations") ||
             pageAccess.includes("export_orders"));
 

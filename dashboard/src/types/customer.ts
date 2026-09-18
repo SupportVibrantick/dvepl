@@ -1,9 +1,7 @@
 export {
-  ContactType,
-  CommunicationType
+  ContactType
 } from './erp';
 
 export type {
-  Customer,
-  CommunicationHistory
+  Customer
 } from './erp';

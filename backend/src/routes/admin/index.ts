@@ -22,16 +22,8 @@ import adminLeaveRouteGroup from "./employeeLeave";
 import adminSalaryRouteGroup from "./salary";
 import adminCustomerRouteGroup from "./customer/index";
 import adminContactRouteGroup from "./contact/index";
-import adminCommunicationRouteGroup from "./communication/index";
-import adminTenderRequestRouteGroup from "./tenderRequest/index";
-import adminTenderRequestActivityRouteGroup from "./tenderRequestActivity/index";
-import adminTenderRouteGroup from "./tender/index";
 import adminReferenceCodeRouteGroup from "./referenceCode/index";
 import adminReferenceCodeCounterRouteGroup from "./referenceCodeCounter/index";
-import adminTenderFileRouteGroup from "./tenderFile/index";
-import adminTenderRemarkRouteGroup from "./tenderRemark/index";
-import adminTenderActivityRouteGroup from "./tenderActivity/index";
-import adminGovernmentDepartmentRouteGroup from "./governmentDepartment/index";
 import adminSectionRouteGroup from "./section/index";
 import adminDivisionRouteGroup from "./division/index";
 import adminSubDivisionRouteGroup from "./subDivision/index";
@@ -223,24 +215,24 @@ async function adminRoutes(
         }
       } else if (url.includes("/order/")) {
         if (url.includes("/create") || url.includes("/update") || url.includes("/delete") || url.includes("/bulk")) {
-          requiredPermissions = ["company.create", "tender.update"];
+          requiredPermissions = ["order.create"];
         } else {
-          requiredPermissions = ["company.view", "tender.view"];
+          requiredPermissions = ["order.view"];
         }
       } else if (url.includes("/quotetender/")) {
         if (url.includes("/create") ||
           url.includes("/update") ||
           url.includes("/delete") ||
           url.includes("/bulk")) {
-          requiredPermissions = ["company.create", "tender.update"];
+          requiredPermissions = ["order.create"];
         } else {
-          requiredPermissions = ["company.view", "tender.view"];
+          requiredPermissions = ["order.view"];
         }
       } else if (url.includes("/vendor/")) {
         if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
-          requiredPermissions = ["company.create", "tender.update"];
+          requiredPermissions = ["vendor.create"];
         } else {
-          requiredPermissions = ["company.view", "tender.view"];
+          requiredPermissions = ["vendor.view"];
         }
       } else if (url.includes("/audit-log/")) {
         requiredPermissions = ["company.view"];
@@ -353,29 +345,11 @@ async function adminRoutes(
         } else {
           requiredPermissions = ["customer.view"];
         }
-      } else if (url.includes("/tender-request/")) {
-        if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
-          requiredPermissions = ["tenderRequest.create"];
-        } else {
-          requiredPermissions = ["tenderRequest.view"];
-        }
-      } else if (url.includes("/tender/")) {
-        if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
-          requiredPermissions = ["tender.create"];
-        } else {
-          requiredPermissions = ["tender.view"];
-        }
       } else if (url.includes("/reference-code/")) {
         if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
           requiredPermissions = ["referenceCode.create"];
         } else {
           requiredPermissions = ["referenceCode.view"];
-        }
-      } else if (url.includes("/government-department/")) {
-        if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
-          requiredPermissions = ["governmentDepartment.create"];
-        } else {
-          requiredPermissions = ["governmentDepartment.view"];
         }
       } else if (url.includes("/section/")) {
         if (url.includes("/create") || url.includes("/update") || url.includes("/delete")) {
@@ -601,31 +575,11 @@ async function adminRoutes(
     });
     instance.register(adminCustomerRouteGroup, { prefix: "/customer" });
     instance.register(adminContactRouteGroup, { prefix: "/contact" });
-    instance.register(adminCommunicationRouteGroup, {
-      prefix: "/communication",
-    });
-    instance.register(adminTenderRequestRouteGroup, {
-      prefix: "/tender-request",
-    });
-    instance.register(adminTenderRequestActivityRouteGroup, {
-      prefix: "/tender-request-activity",
-    });
-    instance.register(adminTenderRouteGroup, { prefix: "/tender" });
     instance.register(adminReferenceCodeRouteGroup, {
       prefix: "/reference-code",
     });
     instance.register(adminReferenceCodeCounterRouteGroup, {
       prefix: "/reference-code-counter",
-    });
-    instance.register(adminTenderFileRouteGroup, { prefix: "/tender-file" });
-    instance.register(adminTenderRemarkRouteGroup, {
-      prefix: "/tender-remark",
-    });
-    instance.register(adminTenderActivityRouteGroup, {
-      prefix: "/tenderActivity",
-    });
-    instance.register(adminGovernmentDepartmentRouteGroup, {
-      prefix: "/government-department",
     });
     instance.register(adminSectionRouteGroup, { prefix: "/section" });
     instance.register(adminDivisionRouteGroup, { prefix: "/division" });

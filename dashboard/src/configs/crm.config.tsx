@@ -2,10 +2,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import * as z from 'zod';
 import { sortableHeader } from '@/components/tables/genericTable';
 import { crmApi } from '@/services/modules';
-import { 
-  Customer, 
-  CommunicationHistory 
-} from '@/types/erp';
+import { Customer } from '@/types/erp';
 
 // ==========================================
 // 13. CUSTOMER ROUTE CONFIG
@@ -84,61 +81,4 @@ export const customersConfig = {
     { label: 'Government Accounts', value: data.filter(c => c.isGovernment).length },
     { label: 'Private Accounts', value: data.filter(c => !c.isGovernment).length }
   ]
-};
-
-// ==========================================
-// 15. COMMUNICATION HISTORY ROUTE CONFIG
-// ==========================================
-export const communicationConfig = {
-  api: crmApi.communications,
-  selectOptions: { customerId: crmApi.customers.list },
-  tableName: 'communicationHistories',
-  moduleName: 'Communication Log',
-  pluralName: 'Communication Logs',
-  zodSchema: z.object({
-    customerId: z.string().min(1, 'Select a customer'),
-    type: z.string().min(1, 'Select interaction channel'),
-    subject: z.string().min(2, 'Subject is required'),
-    content: z.string().optional().nullable()
-  }),
-  defaultFormValues: { customerId: 'cust-1', type: 'CALL', subject: '', content: '' },
-  breadcrumbs: [{ label: 'Dashboard', href: '/' }, { label: 'Interaction History' }],
-  columns: [
-    { accessorKey: 'createdAt', header: sortableHeader('Date & Time'), cell: ({ getValue }) => new Date(getValue() as string).toLocaleString() },
-    { 
-      accessorKey: 'customerId', 
-      header: 'Customer Account',
-      cell: ({ getValue }) => {
-        const id = getValue();
-        if (id === 'cust-1') return 'Indian Railways';
-        if (id === 'cust-2') return 'Larsen & Toubro';
-        return 'ONGC India';
-      }
-    },
-    { 
-      accessorKey: 'type', 
-      header: 'Channel',
-      cell: ({ getValue }) => (
-        <span className="text-xs font-semibold uppercase">{String(getValue())}</span>
-      )
-    },
-    { accessorKey: 'subject', header: 'Discussion Topic' },
-    { accessorKey: 'content', header: 'Summary/Notes' }
-  ] as ColumnDef<CommunicationHistory>[],
-  fields: [
-    { name: 'customerId', label: 'Link Customer', type: 'select', options: [
-      { label: 'Indian Railways (CR)', value: 'cust-1' },
-      { label: 'Larsen & Toubro Ltd', value: 'cust-2' },
-      { label: 'ONGC', value: 'cust-3' }
-    ], required: true },
-    { name: 'type', label: 'Channel Type', type: 'select', options: [
-      { label: 'Phone Call', value: 'CALL' },
-      { label: 'Email Thread', value: 'EMAIL' },
-      { label: 'WhatsApp Message', value: 'WHATSAPP' },
-      { label: 'SMS Notification', value: 'SMS' },
-      { label: 'Internal Note', value: 'NOTE' }
-    ], required: true },
-    { name: 'subject', label: 'Interaction Topic', type: 'text', placeholder: 'Pricing review call notes', required: true },
-    { name: 'content', label: 'Conversation Summary', type: 'textarea', placeholder: 'Enter notes from call or copy paste email text' }
-  ] as any[]
 };

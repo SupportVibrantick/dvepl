@@ -775,7 +775,7 @@ export default function PaymentHistoryPage() {
 
       {/* Edit Payment Modal Popup */}
       {isEditModalOpen && editingPayment && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border w-full max-w-md rounded-xl shadow-lg flex flex-col overflow-hidden">
             <div className="flex items-center justify-between border-b px-5 py-4 bg-muted/20">
               <h3 className="font-bold text-sm text-foreground flex items-center gap-1.5">

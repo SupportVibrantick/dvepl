@@ -38,7 +38,6 @@ model Company {
   engineeringProjects       EngineeringProject[]
   expenses                  Expense[]
   goodsReceipts             GoodsReceipt[]
-  governmentDepartments     GovernmentDepartment[]
   inspectionChecklists      InspectionChecklist[]
   inspections               Inspection[]
   inventories               Inventory[]
@@ -731,7 +730,6 @@ model Tender {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
-  governmentDepartmentId  String?
   boqs                    BOQ[]
   quotations              Quotation[]
   referenceCodes          ReferenceCode[]
@@ -746,7 +744,6 @@ model Tender {
   customer                Customer?                @relation(fields: [customerId], references: [id])
   department              Department?              @relation(fields: [departmentId], references: [id])
   division                Division?                @relation(fields: [divisionId], references: [id])
-  governmentDepartment    GovernmentDepartment?    @relation(fields: [governmentDepartmentId], references: [id])
   section                 Section?                 @relation(fields: [sectionId], references: [id])
   subDivision             SubDivision?             @relation(fields: [subDivisionId], references: [id])
   tenderRequest           TenderRequest?           @relation(fields: [tenderRequestId], references: [id])
@@ -822,40 +819,20 @@ model TenderActivity {
   @@map("tender_activities")
 }
 
-model GovernmentDepartment {
-  id        String    @id @default(uuid())
-  companyId String
-  name      String
-  code      String?
-  shortName String?
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-  company   Company   @relation(fields: [companyId], references: [id])
-  sections  Section[]
-  tenders   Tender[]
-
-  @@unique([companyId, name])
-  @@map("government_departments")
-}
-
 model Section {
-  id                     String                @id @default(uuid())
-  companyId              String
-  departmentId           String
-  name                   String
-  code                   String?
-  isActive               Boolean               @default(true)
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
-  deletedAt              DateTime?
-  governmentDepartmentId String?
-  divisions              Division[]
-  company                Company               @relation(fields: [companyId], references: [id])
-  department             Department            @relation(fields: [departmentId], references: [id])
-  governmentDepartment   GovernmentDepartment? @relation(fields: [governmentDepartmentId], references: [id])
-  tenders                Tender[]
+  id           String     @id @default(uuid())
+  companyId    String
+  departmentId String
+  name         String
+  code         String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+  divisions    Division[]
+  company      Company    @relation(fields: [companyId], references: [id])
+  department   Department @relation(fields: [departmentId], references: [id])
+  tenders      Tender[]
 
   @@unique([departmentId, name])
   @@map("sections")

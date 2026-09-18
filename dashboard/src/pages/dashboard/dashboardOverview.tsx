@@ -424,11 +424,7 @@ export function DashboardOverview() {
             .catch(() => [])
         : Promise.resolve([]);
 
-      const fetchTenders = hasAccess("tenders")
-        ? tenderApi.tenders
-            .list()
-            .catch(() => [])
-        : Promise.resolve([]);
+      const fetchTenders = Promise.resolve([]);
 
       const fetchCostCenters = hasAccess(
         "cost_centers",

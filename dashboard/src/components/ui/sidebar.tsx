@@ -209,7 +209,6 @@ export default function Sidebar({
       tasks: 'tasks',
 
       customers: 'customers',
-      communication_history: 'communication',
       orders: 'orders',
 
       // Workflow Tracker
@@ -219,10 +218,7 @@ export default function Sidebar({
       vendors: 'vendors',
       inventory: 'inventory',
       finance: 'finance',
-      tender_requests: 'tender_requests',
-      tenders: 'tenders',
       technical_clarifications: 'technical_clarifications',
-      government_departments: 'government_departments',
       sections: 'sections',
       divisions: 'divisions',
       sub_divisions: 'sub_divisions',

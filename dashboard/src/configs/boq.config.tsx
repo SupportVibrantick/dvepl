@@ -5,14 +5,12 @@ import { tenderApi } from '@/services/modules';
 
 export const boqsConfig = {
   api: tenderApi.boqs,
-  selectOptions: {
-    tenderId: tenderApi.tenders.list,
-  },
+  selectOptions: {},
   tableName: 'boqs',
   moduleName: 'Bill of Quantity (BOQ)',
   pluralName: 'BOQ Records',
   zodSchema: z.object({
-    tenderId: z.string().min(1, 'Select linked tender'),
+    tenderId: z.string().optional().nullable(),
     boqNo: z.string().min(2, 'Enter BOQ Reference Number'),
     estimatedValue: z.coerce.number().nonnegative(),
     remarks: z.string().optional().nullable(),

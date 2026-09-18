@@ -185,7 +185,7 @@ export function TechnicalClarificationsPage() {
   const fetchMetadata = async () => {
     try {
       const [tendersData, usersData] = await Promise.all([
-        tenderApi.tenders.list(),
+        Promise.resolve([]),
         securityApi.users.list()
       ]);
       setTenders(tendersData);
