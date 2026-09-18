@@ -24,6 +24,7 @@ import {
   Send,
   CheckCircle2,
   ChevronDown,
+  Check,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -58,6 +59,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "react-hot-toast";
 import { jsPDF } from "jspdf";
@@ -299,6 +301,8 @@ export function PurchaseOrdersPage() {
   const [newColName, setNewColName] = useState("");
   const [isAddingCol, setIsAddingCol] = useState(false);
 
+  const [excelColOverride, setExcelColOverride] = useState<{ id: string; label: string }[] | null>(null);
+
   const [isPoPreviewOpen, setIsPoPreviewOpen] = useState(false);
   const poPreviewIframeRef = useRef<HTMLIFrameElement>(null);
   const revisionViewerIframeRef = useRef<HTMLIFrameElement>(null);
@@ -432,9 +436,12 @@ export function PurchaseOrdersPage() {
   };
 
   const poDefaultColumnIds = useMemo(() => {
+    if (excelColOverride) {
+      return ["sno", ...excelColOverride.map((c) => c.id), "total", "delete"];
+    }
     const dynFields = inventoryFields.map((f) => f.fieldName).filter((n) => n !== "qty" && n !== "discountPercent" && n !== "total");
     return ["sno", ...dynFields, "qty", "discountPercent", "total", "delete"];
-  }, [inventoryFields]);
+  }, [inventoryFields, excelColOverride]);
 
   const orderedPoColumnIds = useMemo(() => {
     const mergeOrder = (order: string[]) => {
@@ -475,6 +482,8 @@ export function PurchaseOrdersPage() {
   const getCustomColumnName = (id: string) => id.replace(/^custom_/, "");
 
   const getPoColumnLabel = (id: string) => {
+    const overrideCol = excelColOverride?.find((c) => c.id === id);
+    if (overrideCol) return overrideCol.label;
     switch (id) {
       case "sno": return "S.No.";
       case "description": { const nameField = inventoryFields.find((f) => f.label.toLowerCase().includes("name") || f.label.toLowerCase().includes("desc")); return nameField ? nameField.label : "Item Description"; }
@@ -726,10 +735,16 @@ export function PurchaseOrdersPage() {
   const handleRemoveCustomColumn = (colName: string) => { setColToRemove(colName); setRemoveColConfirmOpen(true); };
 
   const handleImportExcelClick = () => excelImportInputRef.current?.click();
-  const getCellValue = (row: Record<string, any>, keys: string[]): string => {
-    for (const key of Object.keys(row)) {
-      if (keys.includes(key.trim().toLowerCase())) { const v = row[key]; return v === undefined || v === null ? "" : String(v).trim(); }
-    }
+  const mapExcelHeaderToId = (header: string): string => {
+    const h = header.trim().toLowerCase();
+    if (!h) return "";
+    if (/qty|quantity|qty\./.test(h)) return "qty";
+    if (/^rate$|price|cost|rate\b/.test(h)) return "rate";
+    if (/disc/.test(h)) return "discountPercent";
+    if (/unit|uom/.test(h)) return "unit";
+    if (/hsn/.test(h)) return "hsnCode";
+    if (/cat[ ._-]?no|catno|catalog/.test(h) && !/categor/.test(h)) return "catNo";
+    if (/desc|name|item|material|product/.test(h)) return "description";
     return "";
   };
   const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -742,66 +757,50 @@ export function PurchaseOrdersPage() {
         const data = evt.target?.result;
         const workbook = XLSX.read(data, { type: "binary" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-        if (rows.length === 0) { toast.error("No data found in the selected file"); return; }
-        let matchedFromInventory = 0;
+        const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        const dataRows = rows.filter((r) => r.some((c) => String(c ?? "").trim() !== ""));
+        if (dataRows.length === 0) { toast.error("No data found in the selected file"); return; }
+        const headerRow = dataRows[0].map((h, i) => String(h ?? "").trim() || `Column ${i + 1}`);
+        const colDefs: { id: string; label: string }[] = [];
+        headerRow.forEach((label) => {
+          const mapped = mapExcelHeaderToId(label);
+          let id = mapped || `custom_${label}`;
+          if (colDefs.some((c) => c.id === id)) id = mapped ? `custom_${label}` : `custom_${label}__${colDefs.filter((c) => c.id.startsWith(`custom_${label}`)).length + 1}`;
+          if (mapped && colDefs.some((c) => c.id === mapped)) id = `custom_${label}`;
+          colDefs.push({ id, label });
+        });
         const newItems: POItem[] = [];
-        rows.forEach((row, idx) => {
+        dataRows.slice(1).forEach((row, idx) => {
           const newItem: POItem = { id: `row-${Date.now()}-${idx}`, description: "", qty: "", rate: 0, discountPercent: 0, net: 0, total: 0, unit: "", hsnCode: "", catNo: "" };
-          const cellValues = Object.values(row).map((v) => String(v || "").trim()).filter(Boolean);
-          let invMatch: DynamicRecord | undefined;
-          if (cellValues.length > 0) {
-            invMatch = inventoryRecords.find((rec) => Object.values(rec.values || {}).some((val) => {
-              const valStr = String(val || "").trim().toLowerCase();
-              if (!valStr) return false;
-              return cellValues.some((cellVal) => cellVal.toLowerCase() === valStr);
-            }));
-          }
-          if (invMatch) { matchedFromInventory++; newItem.inventoryId = invMatch.id; newItem.materialId = invMatch.id; }
-          inventoryFields.forEach((f) => {
-            const cellVal = getCellValue(row, [f.label.trim().toLowerCase(), f.fieldName.trim().toLowerCase()]);
-            if (cellVal !== "") newItem[f.fieldName] = f.type === "NUMBER" ? Number(cellVal) || 0 : cellVal;
-            else if (invMatch) { const invVal = getRecordValue(invMatch.values, f); if (invVal !== undefined) newItem[f.fieldName] = f.type === "NUMBER" ? Number(invVal) || 0 : String(invVal); }
-            else newItem[f.fieldName] = f.type === "NUMBER" ? 0 : "";
+          colDefs.forEach((col, ci) => {
+            const raw = row[ci] === undefined || row[ci] === null ? "" : String(row[ci]).trim();
+            if (col.id === "qty") newItem.qty = raw === "" ? "" : Number(raw) || 0;
+            else if (col.id === "rate") newItem.rate = Number(raw) || 0;
+            else if (col.id === "discountPercent") newItem.discountPercent = Number(raw) || 0;
+            else newItem[col.id] = raw;
           });
-          const nameField = inventoryFields.find((f) => f.label.toLowerCase().includes("name") || f.label.toLowerCase().includes("desc"));
-          if (nameField) newItem.description = String(newItem[nameField.fieldName] || "");
-          else { const ff = inventoryFields[0]; if (ff) newItem.description = String(newItem[ff.fieldName] || ""); }
-          const qtyField = inventoryFields.find((f) => f.label.toLowerCase().includes("qty") || f.label.toLowerCase().includes("quantity"));
-          const priceField = inventoryFields.find((f) => f.label.toLowerCase().includes("price") || f.label.toLowerCase().includes("rate") || f.label.toLowerCase().includes("cost"));
-          newItem.qty = qtyField ? Number(newItem[qtyField.fieldName]) || 1 : 1;
-          newItem.rate = priceField ? Number(newItem[priceField.fieldName]) || 0 : 0;
-          newItem.net = newItem.rate;
-          newItem.total = newItem.qty * newItem.net;
-          const hasContent = inventoryFields.some((f) => String(newItem[f.fieldName] || "").trim() !== "");
+          const qty = Number(newItem.qty || 0);
+          const net = newItem.rate * (1 - (Number(newItem.discountPercent) || 0) / 100);
+          newItem.net = net;
+          newItem.total = qty * net;
+          const hasContent = colDefs.some((col) => {
+            const val = newItem[col.id];
+            if (col.id === "qty") return String(newItem.qty ?? "").trim() !== "";
+            if (col.id === "rate") return Number(newItem.rate) !== 0;
+            if (col.id === "discountPercent") return Number(newItem.discountPercent) !== 0;
+            return String(val ?? "").trim() !== "";
+          });
           if (hasContent) newItems.push(newItem);
         });
         if (newItems.length === 0) { toast.error("No valid rows found in the Excel file."); return; }
-        setPoItems((prev) => [...prev, ...newItems]);
-        toast.success(`Imported ${newItems.length} item(s) from Excel` + (matchedFromInventory > 0 ? ` (${matchedFromInventory} matched to Inventory)` : ""));
+        setExcelColOverride(colDefs);
+        setPoItems(newItems);
+        toast.success(`Imported ${newItems.length} item(s) — PO columns now match your Excel file (${colDefs.length} columns).`);
       } catch { toast.error("Failed to read the Excel file."); }
       finally { setIsImportingExcel(false); if (excelImportInputRef.current) excelImportInputRef.current.value = ""; }
     };
     reader.onerror = () => { toast.error("Failed to read the selected file."); setIsImportingExcel(false); };
     reader.readAsBinaryString(file);
-  };
-
-  const handleDownloadPoItemsTemplate = () => {
-    const headers = inventoryFields.map((f) => f.label);
-    const sampleRow = inventoryFields.map((f) => {
-      if (f.type === "NUMBER") {
-        if (f.label.toLowerCase().includes("qty") || f.label.toLowerCase().includes("quantity")) return 10;
-        if (f.label.toLowerCase().includes("price") || f.label.toLowerCase().includes("rate")) return 100;
-        return 123;
-      }
-      if (f.label.toLowerCase().includes("unit") || f.label.toLowerCase().includes("uom")) return "Nos";
-      if (f.label.toLowerCase().includes("hsn")) return "8536";
-      return `Sample ${f.label}`;
-    });
-    const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "PO Items");
-    XLSX.writeFile(wb, "po_line_items_template.xlsx");
   };
 
   const openNewDataEntry = (vendor: Vendor | null) => {
@@ -1517,7 +1516,9 @@ export function PurchaseOrdersPage() {
         <SortableHeaderCell key={id} id={id} className={className} width={width}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", width: "100%" }}>
             <span>{getCustomColumnName(id)}</span>
-            <button type="button" onClick={() => handleRemoveCustomColumn(getCustomColumnName(id))} style={{ color: "#ef4444", cursor: "pointer", border: "none", background: "none", fontSize: "12px", fontWeight: "bold" }} title={`Remove column ${getCustomColumnName(id)}`}>✕</button>
+            {!excelColOverride && (
+              <button type="button" onClick={() => handleRemoveCustomColumn(getCustomColumnName(id))} style={{ color: "#ef4444", cursor: "pointer", border: "none", background: "none", fontSize: "12px", fontWeight: "bold" }} title={`Remove column ${getCustomColumnName(id)}`}>✕</button>
+            )}
           </div>
         </SortableHeaderCell>
       );
@@ -1567,6 +1568,9 @@ export function PurchaseOrdersPage() {
     if (id === "net") return <td key={id} className="td-net">₹{(item.net || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>;
     if (id === "total") return <td key={id} className="td-total">₹{(item.total || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>;
     if (id === "delete") return <td key={id} style={{ textAlign: "center" }}><button type="button" className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md inline-flex items-center justify-center" onClick={() => handleDeletePoRow(item.id)} style={{ border: "none", background: "transparent", cursor: "pointer" }}><Trash2 className="size-4" /></button></td>;
+    if (excelColOverride?.some((c) => c.id === id)) {
+      return <td key={id}><input type="text" value={item[id] ?? ""} onChange={(e) => updatePoItemField(item.id, id, e.target.value)} placeholder={getPoColumnLabel(id)} /></td>;
+    }
     if (id.startsWith("custom_")) { const key = getCustomColumnName(id); return <td key={id}><input type="text" value={item[key] || ""} onChange={(e) => updatePoItemField(item.id, key, e.target.value)} /></td>; }
     return <td key={id}>{item[id] ?? ""}</td>;
   };
@@ -2025,9 +2029,11 @@ export function PurchaseOrdersPage() {
                 <span className="de-toolbar-label">LINE ITEMS</span>
                 <button className="de-tbtn de-tbtn-primary" onClick={handleAddPoRow}>➕ Add Row</button>
                 <button className="de-tbtn de-tbtn-featured" onClick={() => { setIsInvImportOpen(true); setInvImportQuery(""); setInvImportSelected(new Set()); }} title="Search and bulk-add items from inventory">📦 Inventory</button>
-                <button className="de-tbtn" onClick={handleImportExcelClick} disabled={isImportingExcel}>{isImportingExcel ? "⏳ Importing..." : "📥 Import Excel"}</button>
-                <button className="de-tbtn" onClick={handleDownloadPoItemsTemplate} title="Download template">📄 Template</button>
+<button className="de-tbtn" onClick={handleImportExcelClick} disabled={isImportingExcel}>{isImportingExcel ? "⏳ Importing..." : "📥 Import Excel"}</button>
                 <input ref={excelImportInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleExcelFileChange} />
+                {excelColOverride && (
+                  <button className="de-tbtn" title="Restore the default PO columns" onClick={() => { setExcelColOverride(null); toast.success("PO columns restored to default"); }}>↺ Default Columns</button>
+                )}
                 <button className="de-tbtn" onClick={handleDuplicateLastRow}>📋 Duplicate Last</button>
                 <div className="de-tbtn-sep"></div>
                 <button className="de-tbtn de-tbtn-danger" onClick={handleClearAllRows}>🗑️ Clear All</button>
@@ -2124,79 +2130,194 @@ export function PurchaseOrdersPage() {
 
       {/* ── INVENTORY (SEARCH + BULK ADD) ── */}
       <Dialog open={isInvImportOpen} onOpenChange={setIsInvImportOpen}>
-        <DialogContent className="max-w-3xl flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-primary"><Package className="size-5" /> Inventory</DialogTitle>
-            <p className="text-xs text-muted-foreground">Search inventory and tick the items to add to this PO — qty &amp; price are editable after importing. Rows already on the PO are marked and will be skipped.</p>
+        <DialogContent className="max-w-4xl flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="flex-row items-center gap-3 px-6 py-4 border-b">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-sm">
+              <Package className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-lg font-bold text-foreground leading-snug">Add from Inventory</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                Pick items to add to this PO. Already-added rows are skipped on import.
+              </DialogDescription>
+            </div>
+            {invImportSelected.size > 0 && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                <Check className="size-3.5" /> {invImportSelected.size} in cart
+              </span>
+            )}
           </DialogHeader>
-          <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-3 focus-within:ring-ring/50 focus-within:border-ring">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input autoFocus value={invImportQuery} onChange={(e) => setInvImportQuery(e.target.value)} placeholder="Search by name, code, HSN, GST…" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-            {invImportQuery && <button type="button" onClick={() => setInvImportQuery("")} className="text-muted-foreground hover:text-foreground"><X className="size-4" /></button>}
-          </div>
-          <div className="flex-1 overflow-auto border rounded-lg min-h-0" style={{ maxHeight: 340 }}>
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur">
-                <tr className="text-left text-xs font-semibold text-muted-foreground">
-                  <th className="w-10 px-3 py-2">
-                    <Checkbox
-                      checked={filteredInvImport.length > 0 && filteredInvImport.every((r) => invImportSelected.has(r.id))}
-                      onCheckedChange={(checked: boolean | "indeterminate") => {
-                        setInvImportSelected((prev) => {
-                          const next = new Set(prev);
-                          if (checked) filteredInvImport.forEach((r) => next.add(r.id));
-                          else filteredInvImport.forEach((r) => next.delete(r.id));
-                          return next;
-                        });
-                      }}
-                    />
-                  </th>
-                  <th className="px-2 py-2">Name</th>
-                  <th className="px-2 py-2">Code</th>
-                  <th className="px-2 py-2">HSN</th>
-                  <th className="px-2 py-2">GST %</th>
-                  <th className="px-2 py-2">Unit</th>
-                  <th className="px-2 py-2 text-right">Price</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
+
+          <div className="grid flex-1 min-h-0 sm:grid-cols-[1fr_300px]" style={{ minHeight: 420 }}>
+            {/* ── LEFT: search + list ── */}
+            <div className="flex min-h-0 flex-col border-r">
+              <div className="flex items-center gap-2 px-5 py-3 bg-muted/30">
+                <div className="flex flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 transition-colors focus-within:border-ring">
+                  <Search className="size-4 shrink-0 text-muted-foreground" />
+                  <input autoFocus value={invImportQuery} onChange={(e) => setInvImportQuery(e.target.value)} placeholder="Search name, code, HSN, GST…" className="w-full border-none bg-transparent text-sm outline-none placeholder:text-muted-foreground" style={{ boxShadow: "none", borderColor: "transparent" }} />
+                  {invImportQuery && (
+                    <button type="button" onClick={() => setInvImportQuery("")} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Clear search">
+                      <X className="size-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto min-h-0 divide-y">
                 {filteredInvImport.length === 0 && (
-                  <tr><td colSpan={7} className="p-6 text-center text-sm text-muted-foreground">No inventory items found.</td></tr>
+                  <div className="px-6 py-14 text-center">
+                    <Package className="mx-auto size-7 text-muted-foreground/40" />
+                    <div className="mt-2 text-sm font-medium text-muted-foreground">No inventory items found</div>
+                    <div className="text-xs text-muted-foreground/70">Try a different search term.</div>
+                  </div>
                 )}
                 {filteredInvImport.map((rec) => {
                   const price = invRecordPrice(rec);
                   const selected = invImportSelected.has(rec.id);
                   const isAdded = existingInvIds.has(rec.id);
+                  const code = invCodeField ? String(getRecordValue(rec.values, invCodeField) || "") || "" : "";
+                  const hsn = invHsnField ? String(getRecordValue(rec.values, invHsnField) || "") || "" : "";
+                  const gst = invGstField ? String(getRecordValue(rec.values, invGstField) || "") || "" : "";
+                  const unit = invUnitField ? String(getRecordValue(rec.values, invUnitField) || "") || "" : "";
                   return (
-                    <tr key={rec.id} onClick={() => toggleInvImport(rec.id)} className={`cursor-pointer transition-colors ${selected ? "bg-primary/5" : "hover:bg-muted/40"} ${isAdded ? "opacity-70" : ""}`}>
-                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={selected} onCheckedChange={() => toggleInvImport(rec.id)} />
-                      </td>
-                      <td className="px-2 py-2 font-medium whitespace-nowrap">
-                        {invRecordName(rec)}
-                        {isAdded && (
-                          <span className="ml-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 align-middle whitespace-nowrap">
-                            Already on PO
+                    <div
+                      key={rec.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleInvImport(rec.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleInvImport(rec.id); } }}
+                      className={`flex cursor-pointer items-start gap-3 px-5 py-3 transition-colors outline-none ${
+                        selected ? "bg-primary/[0.06]" : "hover:bg-muted/40"
+                      } ${isAdded ? "opacity-75" : ""}`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                          selected ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background"
+                        }`}
+                      >
+                        {selected && <Check className="size-3.5" strokeWidth={3} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`truncate text-sm font-semibold ${selected ? "text-primary" : "text-foreground"}`}>
+                            {invRecordName(rec)}
                           </span>
+                          {isAdded && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                              ✓ Added
+                            </span>
+                          )}
+                        </div>
+                        {code && <div className="mt-0.5 truncate text-xs text-muted-foreground/80">{code}</div>}
+                        {(hsn || gst || unit) && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {hsn && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">HSN {hsn}</span>}
+                            {gst && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">GST {gst}%</span>}
+                            {unit && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">UoM {unit}</span>}
+                          </div>
                         )}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">{invCodeField ? String(getRecordValue(rec.values, invCodeField) || "") || "—" : "—"}</td>
-                      <td className="px-2 py-2 text-muted-foreground">{invHsnField ? String(getRecordValue(rec.values, invHsnField) || "") || "—" : "—"}</td>
-                      <td className="px-2 py-2 text-muted-foreground">{invGstField ? String(getRecordValue(rec.values, invGstField) || "") || "—" : "—"}</td>
-                      <td className="px-2 py-2 text-muted-foreground">{invUnitField ? String(getRecordValue(rec.values, invUnitField) || "") || "—" : "—"}</td>
-                      <td className="px-2 py-2 text-right font-semibold">{price > 0 ? `₹${price.toLocaleString("en-IN")}` : "—"}</td>
-                    </tr>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-sm font-bold tabular-nums text-foreground">
+                          {price > 0 ? `₹${price.toLocaleString("en-IN")}` : "—"}
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t pt-3">
-            <span className="text-xs text-muted-foreground">{invImportSelected.size} selected of {filteredInvImport.length} shown</span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setIsInvImportOpen(false)}>Cancel</Button>
-              <Button size="sm" className="cursor-pointer font-semibold" onClick={handleInvImportConfirm}>Import Selected ({invImportSelected.size})</Button>
+              </div>
+
+              <div className="flex items-center justify-between border-t bg-muted/40 px-5 py-2.5">
+                <span className="text-xs font-semibold text-muted-foreground">{filteredInvImport.length} {filteredInvImport.length === 1 ? "item" : "items"} found</span>
+                {filteredInvImport.length > 0 && (
+                  <Checkbox
+                    checked={filteredInvImport.length > 0 && filteredInvImport.every((r) => invImportSelected.has(r.id))}
+                    onCheckedChange={(checked: boolean | "indeterminate") => {
+                      setInvImportSelected((prev) => {
+                        const next = new Set(prev);
+                        const visibleIds = filteredInvImport.map((r) => r.id);
+                        if (checked) visibleIds.forEach((id) => next.add(id));
+                        else visibleIds.forEach((id) => next.delete(id));
+                        return next;
+                      });
+                    }}
+                  />
+                )}
+              </div>
             </div>
+
+            {/* ── RIGHT: selection cart ── */}
+            <div className="hidden sm:flex flex-col min-h-0 bg-muted/20">
+              <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/40">
+                <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Selection</span>
+                <button
+                  type="button"
+                  onClick={() => setInvImportSelected(new Set())}
+                  className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-40"
+                  disabled={invImportSelected.size === 0}
+                >
+                  Clear all
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto min-h-0 divide-y">
+                {invImportSelected.size === 0 && (
+                  <div className="px-4 py-10 text-center">
+                    <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground/60">
+                      <Package className="size-5" />
+                    </div>
+                    <div className="mt-2 text-xs font-medium text-muted-foreground">Nothing selected yet</div>
+                    <div className="text-[11px] text-muted-foreground/70">Tap items on the left to add them here.</div>
+                  </div>
+                )}
+                {inventoryRecords.filter((r) => invImportSelected.has(r.id)).map((rec) => (
+                  <div key={rec.id} className="group flex items-center gap-2 px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold text-foreground">{invRecordName(rec)}</div>
+                      <div className="text-[11px] tabular-nums text-muted-foreground">
+                        {invRecordPrice(rec) > 0 ? `₹${invRecordPrice(rec).toLocaleString("en-IN")}` : "—"}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleInvImport(rec.id)}
+                      className="rounded p-1 text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:text-red-500 group-hover:opacity-100"
+                      title="Remove"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t bg-muted/40 px-4 py-3">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Total value</span>
+                  <span className="text-sm font-bold tabular-nums text-foreground">
+                    ₹{inventoryRecords.filter((r) => invImportSelected.has(r.id)).reduce((s, r) => s + invRecordPrice(r), 0).toLocaleString("en-IN")}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-col gap-2">
+                  <Button size="sm" className="w-full cursor-pointer font-semibold" disabled={invImportSelected.size === 0} onClick={handleInvImportConfirm}>
+                    <Check className="size-4" /> Import {invImportSelected.size}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="w-full cursor-pointer text-muted-foreground" onClick={() => setIsInvImportOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile footer (cart hidden on small screens) */}
+          <div className="flex items-center justify-between gap-3 border-t bg-muted/40 px-6 py-3 sm:hidden">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${invImportSelected.size > 0 ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+              <Check className="size-3.5" /> {invImportSelected.size} selected
+            </span>
+            <Button size="sm" className="cursor-pointer font-semibold" disabled={invImportSelected.size === 0} onClick={handleInvImportConfirm}>
+              Import Selected
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
