@@ -149,12 +149,12 @@ export const sidebarItems: SidebarItem[] = [
     path: ROUTES.TENDER_ORDERS,
     section: "CRM",
   },
-  {
-    name: "Accounts",
-    icon: FileSpreadsheet,
-    path: ROUTES.ACCOUNTS,
-    section: "CRM",
-  },
+  // {
+  //   name: "Accounts",
+  //   icon: FileSpreadsheet,
+  //   path: ROUTES.ACCOUNTS,
+  //   section: "CRM",
+  // },
   {
     name: "Delivery",
     icon: Truck,

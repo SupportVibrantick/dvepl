@@ -1,8 +1,8 @@
 export interface PanelItem {
   id: string;
   panelName: string;
-  qty: number;
-  price: number;
+  qty: number | "";
+  price: number | "";
   total: number;
 }
 
@@ -47,8 +47,8 @@ export interface AccountCostingData {
   sharedFiles: SharedOrderFile[];
   accountFiles: AccountSectionFile[];
   items: PanelItem[];
-  taxPercent: number;
-  lessAdvance: number;
+  taxPercent: number | "";
+  lessAdvance: number | "";
   specialNote: string;
   lastSavedAt?: string;
 }

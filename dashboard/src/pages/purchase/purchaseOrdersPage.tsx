@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Send,
   CheckCircle2,
+  ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -245,6 +246,9 @@ export function PurchaseOrdersPage() {
   const canExport = canPerformPageAction(currentUser?.actionPermissions, "purchaseOrders", "export");
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [vendorSearch, setVendorSearch] = useState("");
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
+  const vendorSelectRef = useRef<HTMLDivElement>(null);
   const [revisions, setRevisions] = useState<PORevision[]>([]);
   const [nextPoNo, setNextPoNo] = useState("");
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
@@ -256,10 +260,25 @@ export function PurchaseOrdersPage() {
 
   const [isDataEntryOpen, setIsDataEntryOpen] = useState(false);
   const [activePoVendor, setActivePoVendor] = useState<Vendor | null>(null);
+  const [vendorContact, setVendorContact] = useState({ contactPerson: "", phone: "", email: "", gstNumber: "", address: "" });
   const [deMaximized, setDeMaximized] = useState(false);
   const [linkedSalesOrderId, setLinkedSalesOrderId] = useState<string>("");
 
+  const [isInvImportOpen, setIsInvImportOpen] = useState(false);
+  const [invImportQuery, setInvImportQuery] = useState("");
+  const [invImportSelected, setInvImportSelected] = useState<Set<string>>(new Set());
+
   const orderType = linkedSalesOrderId ? "JO Order PO" : "Stock Order";
+
+  useEffect(() => {
+    setVendorContact({
+      contactPerson: activePoVendor?.contactPerson || "",
+      phone: activePoVendor?.phone || "",
+      email: activePoVendor?.email || "",
+      gstNumber: activePoVendor?.gstNumber || "",
+      address: activePoVendor?.address || "",
+    });
+  }, [activePoVendor?.id]);
 
   const [companyDetails, setCompanyDetails] = useState({ name: "", address: "", phone: "", email: "", gstin: "", iso: "", signatory: "", division: "" });
   const [poNumber, setPoNumber] = useState("");
@@ -556,6 +575,110 @@ export function PurchaseOrdersPage() {
     const nameVal = primaryField ? getRecordValue(invRecord.values, primaryField) : "";
     toast.success(`Loaded "${nameVal || "Item"}" details from inventory`);
     setInventoryDropdownRowId(null);
+  };
+
+  const invNameField = inventoryFields[0];
+  const invCodeField = useMemo(
+    () => inventoryFields.find((f) => /code|ref\s?no|item\s?no|material\s?no/i.test(f.label) && !/gst|hsn/i.test(f.label)) ?? inventoryFields[1],
+    [inventoryFields],
+  );
+  const invUnitField = useMemo(() => inventoryFields.find((f) => /\bunit\b/i.test(f.label)), [inventoryFields]);
+  const invHsnField = useMemo(() => inventoryFields.find((f) => /\bhsn\b/i.test(f.label)), [inventoryFields]);
+  const invGstField = useMemo(() => inventoryFields.find((f) => /\bgst\b/i.test(f.label)), [inventoryFields]);
+  const invPriceField = useMemo(
+    () => inventoryFields.find((f) => f.label.toLowerCase().includes("price") || f.label.toLowerCase().includes("rate")),
+    [inventoryFields],
+  );
+
+  const invRecordName = (rec: DynamicRecord): string => {
+    const v = invNameField ? getRecordValue(rec.values, invNameField) : undefined;
+    return String(v || Object.values(rec.values || {})[0] || "Unnamed");
+  };
+  const invRecordPrice = (rec: DynamicRecord): number => {
+    const fromField = invPriceField ? Number(getRecordValue(rec.values, invPriceField)) || 0 : 0;
+    return fromField || Number(rec.inventory?.unitPrice) || 0;
+  };
+
+  const createPoItemFromInventory = (invRecord: DynamicRecord): POItem => {
+    const newItem: POItem = {
+      id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      description: "",
+      qty: 1,
+      rate: 0,
+      discountPercent: 0,
+      net: 0,
+      total: 0,
+      unit: "",
+      hsnCode: "",
+      catNo: "",
+      inventoryId: invRecord.id,
+      materialId: invRecord.id,
+    };
+    inventoryFields.forEach((f) => {
+      const loadedValue = getRecordValue(invRecord.values, f);
+      newItem[f.fieldName] = loadedValue !== undefined && loadedValue !== null ? loadedValue : "";
+    });
+    if (invNameField) newItem.description = String(newItem[invNameField.fieldName] || "");
+    if (invUnitField) newItem.unit = String(newItem[invUnitField.fieldName] || "");
+    if (invHsnField) newItem.hsnCode = String(newItem[invHsnField.fieldName] || "");
+    const qtyField = inventoryFields.find((f) => f.label.toLowerCase().includes("qty") || f.label.toLowerCase().includes("quantity"));
+    const discountField = inventoryFields.find((f) => f.label.toLowerCase().includes("discount"));
+    const loadPrice = invPriceField ? Number(getRecordValue(invRecord.values, invPriceField)) || 0 : 0;
+    newItem.qty = qtyField ? Number(newItem[qtyField.fieldName]) || 1 : 1;
+    const rate = loadPrice || Number(invRecord.inventory?.unitPrice) || 0;
+    newItem.rate = rate;
+    newItem.discountPercent = discountField ? Number(newItem[discountField.fieldName]) || 0 : 0;
+    const disc = Number(newItem.discountPercent) || 0;
+    const net = rate * (1 - disc / 100);
+    newItem.net = net;
+    newItem.total = (Number(newItem.qty) || 1) * net;
+    return newItem;
+  };
+
+  const appendPoItemsFromInventory = (records: DynamicRecord[]) => {
+    const existingIds = new Set(poItems.map((i) => i.inventoryId || i.materialId).filter(Boolean));
+    const skipIds = new Set(existingIds);
+    const fresh = records.filter((r) => !skipIds.has(r.id));
+    const skipped = records.length - fresh.length;
+    if (fresh.length === 0) {
+      toast.error("All selected items are already on this PO.");
+      return;
+    }
+    setPoItems((prev) => [...prev, ...fresh.map(createPoItemFromInventory)]);
+    toast.success(`${fresh.length} item(s) added from inventory${skipped ? ` — ${skipped} skipped (already present)` : ""}`);
+  };
+
+  const toggleInvImport = (id: string) =>
+    setInvImportSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const filteredInvImport = useMemo(() => {
+    const q = invImportQuery.trim().toLowerCase();
+    if (!q) return inventoryRecords;
+    return inventoryRecords.filter((rec) =>
+      Object.values(rec.values || {}).some((val) => String(val || "").toLowerCase().includes(q)),
+    );
+  }, [inventoryRecords, invImportQuery]);
+
+  const existingInvIds = useMemo(
+    () => new Set(poItems.map((i) => i.inventoryId || i.materialId).filter(Boolean)),
+    [poItems],
+  );
+
+  const handleInvImportConfirm = () => {
+    const recs = inventoryRecords.filter((r) => invImportSelected.has(r.id));
+    if (recs.length === 0) {
+      toast.error("Select at least one item to import.");
+      return;
+    }
+    appendPoItemsFromInventory(recs);
+    setIsInvImportOpen(false);
+    setInvImportQuery("");
+    setInvImportSelected(new Set());
   };
 
   const updatePoItemField = (id: string, field: string, val: any) => {
@@ -1480,6 +1603,28 @@ export function PurchaseOrdersPage() {
     return revisions.filter((r) => r.vendorId === activePoVendor.id && r.poNumber === poNumber).sort((a, b) => b.revisionNo - a.revisionNo);
   }, [revisions, activePoVendor, poNumber]);
 
+  const filteredVendors = useMemo(() => {
+    const q = vendorSearch.trim().toLowerCase();
+    if (!q) return vendors;
+    return vendors.filter((v) =>
+      [v.name, v.category, v.contactPerson, v.phone, v.email, v.gstNumber].some((s) =>
+        String(s || "").toLowerCase().includes(q),
+      ),
+    );
+  }, [vendors, vendorSearch]);
+
+  useEffect(() => {
+    if (!vendorDropdownOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (vendorSelectRef.current && !vendorSelectRef.current.contains(e.target as Node)) {
+        setVendorDropdownOpen(false);
+        setVendorSearch("");
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [vendorDropdownOpen]);
+
   const tableColumns = useMemo(() => [
     { accessorKey: "poNumber", header: sortableHeader("PO Number") },
     {
@@ -1701,7 +1846,12 @@ export function PurchaseOrdersPage() {
       </div>
 
       {/* PO Revisions Table */}
-      <GenericTable columns={tableColumns} data={filteredPoRevisions} storageKey="purchaseOrders" />
+      <GenericTable
+        columns={tableColumns}
+        data={filteredPoRevisions}
+        storageKey="purchaseOrders"
+        onRowClick={(rev) => setViewingRevision(rev)}
+      />
 
       {/* ── DATA ENTRY PANEL ── */}
       {isDataEntryOpen && (
@@ -1783,14 +1933,48 @@ export function PurchaseOrdersPage() {
               {/* PO Header */}
               <div className="de-po-header">
                 <div className="de-po-field"><label>Order Place To *</label>
-                  <select value={activePoVendor?.id || ""} onChange={(e) => { const v = vendors.find((v) => v.id === e.target.value); if (v) setActivePoVendor(v); }} style={!activePoVendor ? { borderColor: "#f59e0b" } : undefined}>
-                    <option value="">— Select Vendor —</option>
-                    {vendors.map((v) => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
+                  <div ref={vendorSelectRef} style={{ position: "relative" }}>
+                    <button type="button" className="de-vendor-combobox-trigger" style={!activePoVendor ? { borderColor: "#f59e0b" } : undefined} onClick={() => { setVendorDropdownOpen((prev) => !prev); if (!vendorDropdownOpen) setVendorSearch(""); }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: activePoVendor ? "#0f172a" : "#94a3b8" }}>{activePoVendor ? activePoVendor.name : "— Select Vendor —"}</span>
+                      <ChevronDown className="size-4 shrink-0" style={{ color: "#64748b", transform: vendorDropdownOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
+                    </button>
+                    {vendorDropdownOpen && (
+                      <div className="de-vendor-combobox-panel">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                          <Search className="size-3.5 shrink-0" style={{ color: "#94a3b8" }} />
+                          <input autoFocus type="text" value={vendorSearch} onChange={(e) => { setVendorSearch(e.target.value); setVendorDropdownOpen(true); }} placeholder="Search vendor…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: "#0f172a" }} />
+                          {vendorSearch && (
+                            <button type="button" onClick={() => setVendorSearch("")} style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8", padding: 0 }} title="Clear search"><X className="size-3.5" /></button>
+                          )}
+                        </div>
+                        <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                          {filteredVendors.length === 0 && (
+                            <div style={{ padding: "14px 12px", textAlign: "center", fontSize: 12, color: "#94a3b8" }}>No vendors match "{vendorSearch}"</div>
+                          )}
+                          {filteredVendors.map((v) => {
+                            const selected = activePoVendor?.id === v.id;
+                            return (
+                              <button type="button" key={v.id} onClick={() => { setActivePoVendor(v); setVendorDropdownOpen(false); setVendorSearch(""); }} style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: selected ? "#eff6ff" : "#ffffff", padding: "7px 10px", cursor: "pointer" }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{v.name}</div>
+                                {(v.category || v.phone || v.email) && (
+                                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {[v.category, v.phone, v.email].filter(Boolean).join(" · ")}
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {!activePoVendor && <span style={{ color: "#f59e0b", fontSize: "11px", marginTop: "2px" }}>Vendor is required</span>}
                 </div>
+                <div className="de-po-field"><label>Contact Person</label><input type="text" value={vendorContact.contactPerson} onChange={(e) => setVendorContact({ ...vendorContact, contactPerson: e.target.value })} placeholder="Contact person" /></div>
+                <div className="de-po-field"><label>Phone</label><input type="text" value={vendorContact.phone} onChange={(e) => setVendorContact({ ...vendorContact, phone: e.target.value })} placeholder="Phone number" /></div>
+                <div className="de-po-field"><label>Email</label><input type="text" value={vendorContact.email} onChange={(e) => setVendorContact({ ...vendorContact, email: e.target.value })} placeholder="Email address" /></div>
+                <div className="de-po-field"><label>GST Number</label><input type="text" value={vendorContact.gstNumber} onChange={(e) => setVendorContact({ ...vendorContact, gstNumber: e.target.value })} placeholder="GST number" /></div>
+                <div className="de-po-field"><label>Address</label><input type="text" value={vendorContact.address} onChange={(e) => setVendorContact({ ...vendorContact, address: e.target.value })} placeholder="Billing address" /></div>
                 <div className="de-po-field"><label>PO Number *</label><input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2025-001" style={!poNumber.trim() ? { borderColor: "#f59e0b" } : undefined} />{!poNumber.trim() && <span style={{ color: "#f59e0b", fontSize: "11px", marginTop: "2px" }}>PO Number is required</span>}</div>
                 <div className="de-po-field"><label>PO Date *</label><input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={!poDate ? { borderColor: "#f59e0b" } : undefined} />{!poDate && <span style={{ color: "#f59e0b", fontSize: "11px", marginTop: "2px" }}>PO Date is required</span>}</div>
                 <div className="de-po-field"><label>Reference Code</label><input type="text" value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} placeholder="e.g. REF-2026-001" /></div>
@@ -1839,7 +2023,8 @@ export function PurchaseOrdersPage() {
               {/* Toolbar */}
               <div className="de-toolbar">
                 <span className="de-toolbar-label">LINE ITEMS</span>
-                <button className="de-tbtn" onClick={handleAddPoRow}>➕ Add Row</button>
+                <button className="de-tbtn de-tbtn-primary" onClick={handleAddPoRow}>➕ Add Row</button>
+                <button className="de-tbtn de-tbtn-featured" onClick={() => { setIsInvImportOpen(true); setInvImportQuery(""); setInvImportSelected(new Set()); }} title="Search and bulk-add items from inventory">📦 Inventory</button>
                 <button className="de-tbtn" onClick={handleImportExcelClick} disabled={isImportingExcel}>{isImportingExcel ? "⏳ Importing..." : "📥 Import Excel"}</button>
                 <button className="de-tbtn" onClick={handleDownloadPoItemsTemplate} title="Download template">📄 Template</button>
                 <input ref={excelImportInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleExcelFileChange} />
@@ -1933,6 +2118,85 @@ export function PurchaseOrdersPage() {
             >
               <Printer className="size-4" /> Print
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── INVENTORY (SEARCH + BULK ADD) ── */}
+      <Dialog open={isInvImportOpen} onOpenChange={setIsInvImportOpen}>
+        <DialogContent className="max-w-3xl flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-primary"><Package className="size-5" /> Inventory</DialogTitle>
+            <p className="text-xs text-muted-foreground">Search inventory and tick the items to add to this PO — qty &amp; price are editable after importing. Rows already on the PO are marked and will be skipped.</p>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-3 focus-within:ring-ring/50 focus-within:border-ring">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <input autoFocus value={invImportQuery} onChange={(e) => setInvImportQuery(e.target.value)} placeholder="Search by name, code, HSN, GST…" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+            {invImportQuery && <button type="button" onClick={() => setInvImportQuery("")} className="text-muted-foreground hover:text-foreground"><X className="size-4" /></button>}
+          </div>
+          <div className="flex-1 overflow-auto border rounded-lg min-h-0" style={{ maxHeight: 340 }}>
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur">
+                <tr className="text-left text-xs font-semibold text-muted-foreground">
+                  <th className="w-10 px-3 py-2">
+                    <Checkbox
+                      checked={filteredInvImport.length > 0 && filteredInvImport.every((r) => invImportSelected.has(r.id))}
+                      onCheckedChange={(checked: boolean | "indeterminate") => {
+                        setInvImportSelected((prev) => {
+                          const next = new Set(prev);
+                          if (checked) filteredInvImport.forEach((r) => next.add(r.id));
+                          else filteredInvImport.forEach((r) => next.delete(r.id));
+                          return next;
+                        });
+                      }}
+                    />
+                  </th>
+                  <th className="px-2 py-2">Name</th>
+                  <th className="px-2 py-2">Code</th>
+                  <th className="px-2 py-2">HSN</th>
+                  <th className="px-2 py-2">GST %</th>
+                  <th className="px-2 py-2">Unit</th>
+                  <th className="px-2 py-2 text-right">Price</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredInvImport.length === 0 && (
+                  <tr><td colSpan={7} className="p-6 text-center text-sm text-muted-foreground">No inventory items found.</td></tr>
+                )}
+                {filteredInvImport.map((rec) => {
+                  const price = invRecordPrice(rec);
+                  const selected = invImportSelected.has(rec.id);
+                  const isAdded = existingInvIds.has(rec.id);
+                  return (
+                    <tr key={rec.id} onClick={() => toggleInvImport(rec.id)} className={`cursor-pointer transition-colors ${selected ? "bg-primary/5" : "hover:bg-muted/40"} ${isAdded ? "opacity-70" : ""}`}>
+                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={selected} onCheckedChange={() => toggleInvImport(rec.id)} />
+                      </td>
+                      <td className="px-2 py-2 font-medium whitespace-nowrap">
+                        {invRecordName(rec)}
+                        {isAdded && (
+                          <span className="ml-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 align-middle whitespace-nowrap">
+                            Already on PO
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-muted-foreground">{invCodeField ? String(getRecordValue(rec.values, invCodeField) || "") || "—" : "—"}</td>
+                      <td className="px-2 py-2 text-muted-foreground">{invHsnField ? String(getRecordValue(rec.values, invHsnField) || "") || "—" : "—"}</td>
+                      <td className="px-2 py-2 text-muted-foreground">{invGstField ? String(getRecordValue(rec.values, invGstField) || "") || "—" : "—"}</td>
+                      <td className="px-2 py-2 text-muted-foreground">{invUnitField ? String(getRecordValue(rec.values, invUnitField) || "") || "—" : "—"}</td>
+                      <td className="px-2 py-2 text-right font-semibold">{price > 0 ? `₹${price.toLocaleString("en-IN")}` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t pt-3">
+            <span className="text-xs text-muted-foreground">{invImportSelected.size} selected of {filteredInvImport.length} shown</span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setIsInvImportOpen(false)}>Cancel</Button>
+              <Button size="sm" className="cursor-pointer font-semibold" onClick={handleInvImportConfirm}>Import Selected ({invImportSelected.size})</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

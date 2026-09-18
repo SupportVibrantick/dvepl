@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   ShieldAlert,
   ArrowLeft,
+  Search,
+  X,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
@@ -51,23 +53,23 @@ import {
 const DEFAULT_SHARED_FILES: SharedOrderFile[] = [];
 
 const DEFAULT_CUSTOMER_DETAILS: CustomerMasterDetails = {
-  companyName: "gk enterprises",
-  contactPerson: "—",
-  dveplRefCode: "123456",
-  dateOfOrder: "2026-08-31",
-  dateOfCommitment: "2026-10-15",
-  projectRef: "1234",
-  gstNumber: "—",
-  billingAddress: "—",
-  specialNotes: "—",
+  companyName: "",
+  contactPerson: "",
+  dveplRefCode: "",
+  dateOfOrder: "",
+  dateOfCommitment: "",
+  projectRef: "",
+  gstNumber: "",
+  billingAddress: "",
+  specialNotes: "",
 };
 
 function createDefaultItem(): PanelItem {
   return {
     id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     panelName: "",
-    qty: 1,
-    price: 0,
+    qty: "",
+    price: "",
     total: 0,
   };
 }
@@ -106,6 +108,29 @@ export function AccountsPage() {
   const [orderList, setOrderList] = useState<Array<{ id: string; dveplCode?: string; partyName?: string; caNo?: string }>>([]);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [rawOrder, setRawOrder] = useState<any>(null);
+  const [orderSearch, setOrderSearch] = useState("");
+  const orderSearchRef = useRef<HTMLInputElement>(null);
+
+  const getOrderDisplay = (
+    ord: { id: string; dveplCode?: string; caNo?: string; partyName?: string },
+  ): { label: string; code: string; name: string } => {
+    const code = ord.dveplCode || ord.caNo || `ORD-${ord.id.slice(0, 8)}`;
+    const name = (ord.partyName || "").trim();
+    return {
+      label: name ? `${name} (${code})` : code,
+      code,
+      name,
+    };
+  };
+
+  const filteredOrderList = useMemo(() => {
+    const q = orderSearch.trim().toLowerCase();
+    if (!q) return orderList;
+    return orderList.filter((ord) => {
+      const { label, code, name } = getOrderDisplay(ord);
+      return `${label} ${code} ${name}`.toLowerCase().includes(q);
+    });
+  }, [orderList, orderSearch]);
 
   const store = useERPStore();
   const currentUser = useMemo(() => {
@@ -196,7 +221,7 @@ export function AccountsPage() {
     return DEFAULT_ITEMS;
   });
 
-  const [taxPercent, setTaxPercent] = useState<number>(() => {
+  const [taxPercent, setTaxPercent] = useState<number | "">(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -204,10 +229,10 @@ export function AccountsPage() {
         if (typeof parsed.taxPercent === "number") return parsed.taxPercent;
       }
     } catch {}
-    return 18;
+    return "";
   });
 
-  const [lessAdvance, setLessAdvance] = useState<number>(() => {
+  const [lessAdvance, setLessAdvance] = useState<number | "">(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -215,7 +240,7 @@ export function AccountsPage() {
         if (typeof parsed.lessAdvance === "number") return parsed.lessAdvance;
       }
     } catch {}
-    return 0;
+    return "";
   });
 
   const [specialNote, setSpecialNote] = useState<string>(() => {
@@ -379,14 +404,13 @@ export function AccountsPage() {
         } else if (orderData.items && orderData.items.length > 0) {
           setItems(
             orderData.items.map((it: any, idx: number) => {
-              const qty = Number(it.quantity) || 1;
               const price = Number(it.unitPrice || it.rate) || 0;
               return {
                 id: it.id || `item-${idx + 1}-${Math.random().toString(36).substring(2, 7)}`,
                 panelName: it.description || it.itemCode || `Panel ${idx + 1}`,
-                qty,
+                qty: "",
                 price,
-                total: qty * price,
+                total: 0,
               };
             })
           );
@@ -428,14 +452,13 @@ export function AccountsPage() {
   }, []);
 
   useEffect(() => {
-    const targetId = id || (orderList.length > 0 ? orderList[0].id : null);
-    if (!targetId) return;
+    if (!id) return;
 
-    if (loadedTargetIdRef.current === targetId) return;
-    loadedTargetIdRef.current = targetId;
+    if (loadedTargetIdRef.current === id) return;
+    loadedTargetIdRef.current = id;
 
-    void fetchOrderData(targetId);
-  }, [id, orderList, fetchOrderData]);
+    void fetchOrderData(id);
+  }, [id, fetchOrderData]);
 
   // Calculations
   const calculatedValues = useMemo(() => {
@@ -480,8 +503,8 @@ export function AccountsPage() {
       {
         id: newId,
         panelName: "",
-        qty: 1,
-        price: 0,
+        qty: "",
+        price: "",
         total: 0,
       },
     ]);
@@ -697,21 +720,72 @@ export function AccountsPage() {
                   onValueChange={(val) => {
                     if (val) navigate(`/accounts/${val}`);
                   }}
+                  onOpenChange={(open) => {
+                    if (open) {
+                      setOrderSearch("");
+                      setTimeout(() => orderSearchRef.current?.focus(), 30);
+                    }
+                  }}
                 >
-                  <SelectTrigger className="h-8 w-[200px] sm:w-[240px] rounded-lg text-xs font-medium border-border/60 bg-background">
-                    <SelectValue placeholder="Select an order..." />
+                  <SelectTrigger className="h-8 w-[220px] sm:w-[280px] rounded-lg text-xs font-medium border-border/60 bg-background">
+                    <SelectValue>
+                      {(selVal) => {
+                        const selOrd = orderList.find((o) => o.id === selVal);
+                        return selOrd ? getOrderDisplay(selOrd).label : "Select an order...";
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {orderList.map((ord) => (
-                      <SelectItem key={ord.id} value={ord.id} className="text-xs">
-                        <span className="font-mono font-bold text-primary mr-1.5">
-                          {ord.dveplCode || ord.caNo || ord.id.slice(0, 8)}
-                        </span>
-                        <span className="text-muted-foreground truncate">
-                          {ord.partyName ? `(${ord.partyName})` : ""}
-                        </span>
-                      </SelectItem>
-                    ))}
+                  <SelectContent
+                    className="max-h-60"
+                    alignItemWithTrigger={false}
+                    collisionAvoidance={{ side: "none", align: "none" }}
+                  >
+                    <div className="sticky top-0 z-10 border-b border-border/70 bg-popover px-1.5 py-1.5">
+                      <div className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 shadow-2xs transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+                        <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                        <input
+                          ref={orderSearchRef}
+                          value={orderSearch}
+                          onChange={(e) => setOrderSearch(e.target.value)}
+                          onKeyDownCapture={(e) => {
+                            if (e.key !== "Escape" && e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "Tab") {
+                              e.nativeEvent.stopPropagation();
+                            }
+                          }}
+                          placeholder="Search order..."
+                          className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                        />
+                        {orderSearch && (
+                          <button
+                            type="button"
+                            aria-label="Clear search"
+                            onClick={() => {
+                              setOrderSearch("");
+                              orderSearchRef.current?.focus();
+                            }}
+                            onKeyDownCapture={(e) => e.nativeEvent.stopPropagation()}
+                            className="flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {filteredOrderList.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        No orders found
+                      </div>
+                    ) : (
+                      filteredOrderList.map((ord) => {
+                        const { label, code, name } = getOrderDisplay(ord);
+                        return (
+                          <SelectItem key={ord.id} value={ord.id} label={label} className="text-xs">
+                            <span className="font-mono font-bold text-primary min-w-0 shrink truncate">{code}</span>
+                            <span className="text-muted-foreground min-w-0 shrink truncate">{name}</span>
+                          </SelectItem>
+                        );
+                      })
+                    )}
                   </SelectContent>
                 </Select>
                 <Button
@@ -1041,7 +1115,8 @@ export function AccountsPage() {
                           min="0"
                           value={item.qty === 0 ? "0" : item.qty || ""}
                           onChange={(e) => handleItemChange(item.id, "qty", e.target.value)}
-                          className="w-full py-1.5 text-xs text-center text-foreground bg-transparent border-0 focus:outline-hidden focus:ring-0"
+                          placeholder="Qty"
+                          className="w-full py-1.5 text-xs text-center text-foreground placeholder:text-muted-foreground bg-transparent border-0 focus:outline-hidden focus:ring-0"
                         />
                       </td>
 
@@ -1052,7 +1127,8 @@ export function AccountsPage() {
                           min="0"
                           value={item.price === 0 ? "0" : item.price || ""}
                           onChange={(e) => handleItemChange(item.id, "price", e.target.value)}
-                          className="w-full py-1.5 text-xs text-center text-foreground bg-transparent border-0 focus:outline-hidden focus:ring-0 font-mono"
+                          placeholder="Price"
+                          className="w-full py-1.5 text-xs text-center text-foreground placeholder:text-muted-foreground bg-transparent border-0 focus:outline-hidden focus:ring-0 font-mono"
                         />
                       </td>
 
@@ -1113,6 +1189,7 @@ export function AccountsPage() {
                   max="100"
                   value={taxPercent}
                   onChange={(e) => setTaxPercent(Number(e.target.value) || 0)}
+                  placeholder="18"
                   className="w-12 py-0.5 px-1 text-xs text-center border border-input rounded-md bg-background focus:ring-1 focus:ring-primary focus:outline-hidden"
                 />
               </div>
@@ -1133,6 +1210,7 @@ export function AccountsPage() {
                   min="0"
                   value={lessAdvance}
                   onChange={(e) => setLessAdvance(Number(e.target.value) || 0)}
+                  placeholder="0"
                   className="w-20 py-0.5 px-1 text-xs text-right border border-input rounded-md bg-background focus:ring-1 focus:ring-primary focus:outline-hidden font-mono"
                 />
               </div>

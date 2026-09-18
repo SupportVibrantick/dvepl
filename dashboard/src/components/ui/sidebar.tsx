@@ -96,14 +96,6 @@ export default function Sidebar({
         );
       }
 
-      // Accounts / costing sheet
-      if (normItem === '/accounts') {
-        return (
-          normCurrent.startsWith('/accounts') ||
-          normCurrent.startsWith('/accounts-preview')
-        );
-      }
-
       // Engineering Drawings / Export orders
       if (normItem === '/export-orders') {
         return (
