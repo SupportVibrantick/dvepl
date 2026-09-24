@@ -4,8 +4,8 @@ import {
   FastifyRequest,
 } from "fastify";
 
-import { fetchAwardTenders } from "../../../services/quoteTender.service";
-import { syncCustomersFromQuoteTender } from "../../../services/quoteTenderCustomerSync.service";
+import { fetchAllPortalCustomers } from "../../../services/quoteTender.service";
+import { syncCustomersFromPortal } from "../../../services/quoteTenderCustomerSync.service";
 import { adminLogs } from "../../../services/logger/contextLogger";
 
 async function syncCustomerRoute(
@@ -36,23 +36,22 @@ async function syncCustomerRoute(
           });
         }
 
-        const awardTenders = await fetchAwardTenders();
+        const body = (request.body ?? {}) as { limit?: number; all?: boolean };
+        const requested = Number(body.limit);
+        const limit = body.all
+          ? 0
+          : requested > 0
+            ? requested
+            : Number(process.env.QUOTE_TENDER_CUSTOMER_FETCH_LIMIT) || 100;
 
-        let tendersArray: any[] = [];
-        if (Array.isArray(awardTenders)) {
-          tendersArray = awardTenders;
-        } else if (awardTenders && Array.isArray((awardTenders as any).data)) {
-          tendersArray = (awardTenders as any).data;
-        } else if (awardTenders && (awardTenders as any).data && Array.isArray((awardTenders as any).data.data)) {
-          tendersArray = (awardTenders as any).data.data;
-        }
+        const portalCustomers = await fetchAllPortalCustomers(limit);
 
-        fastify.log.info(`Customer sync found ${tendersArray.length} tenders to process.`);
+        fastify.log.info(`Customer sync found ${portalCustomers.length} customer(s) to process (limit ${limit}).`);
 
-        const customers = await syncCustomersFromQuoteTender(
+        const customers = await syncCustomersFromPortal(
           fastify.prisma,
           companyId,
-          tendersArray
+          portalCustomers
         );
 
         adminLogs.info("Customers synced from Quote Tender portal", {

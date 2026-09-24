@@ -16,11 +16,26 @@ export const customersConfig = {
   searchPlaceholder: 'Search corporate accounts...',
   syncAction: {
     label: 'Sync from Portal',
-    run: async () => {
-      const res = await crmApi.customers.sync();
+    limitField: {
+      label: 'Fetch',
+      placeholder: 'How many?',
+      defaultValue: 20,
+    },
+    run: async (limit?: number) => {
+      const res = await crmApi.customers.sync(limit);
       return {
         syncedCount: res?.syncedCount ?? 0,
         message: res?.message ?? 'Customers synced from portal.',
+      };
+    },
+  },
+  syncAllAction: {
+    label: 'Sync All',
+    run: async () => {
+      const res = await crmApi.customers.syncAll();
+      return {
+        syncedCount: res?.syncedCount ?? 0,
+        message: res?.message ?? 'All customers synced from portal.',
       };
     },
   },

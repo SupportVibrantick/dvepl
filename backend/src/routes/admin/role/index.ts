@@ -5,6 +5,7 @@ import getAllRolesRoute from "./read";
 import readRoleByIdRoute from "./readbyId";
 import updateRoleRoute from "./update";
 import deleteRoleRoute from "./delete";
+import syncPortalRolesRoute from "./syncPortal";
 
 async function adminRoleRouteGroup(
   fastify: FastifyInstance,
@@ -25,6 +26,9 @@ async function adminRoleRouteGroup(
   });
   fastify.register(deleteRoleRoute, {
     prefix: "/delete",
+  });
+  fastify.register(syncPortalRolesRoute, {
+    prefix: "/sync-portal",
   });
 }
 

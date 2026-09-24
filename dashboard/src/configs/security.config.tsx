@@ -11,6 +11,16 @@ export const rolesConfig = {
   tableName: 'roles',
   moduleName: 'Role',
   pluralName: 'PRBAC Roles',
+  syncAction: {
+    label: 'Sync Roles',
+    run: async () => {
+      const res = await securityApi.roles.sync();
+      return {
+        syncedCount: res?.syncedCount ?? 0,
+        message: res?.message ?? 'Roles synced from portal.',
+      };
+    },
+  },
   zodSchema: z.object({
     name: z.string().min(2, 'Role name is required'),
     description: z.string().optional().nullable(),

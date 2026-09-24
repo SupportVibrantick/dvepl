@@ -215,6 +215,7 @@ export const API_ENDPOINTS = {
       create: '/role/create/',
       update: (id: string) => `/role/update/${id}`,
       remove: (id: string) => `/role/delete/${id}`,
+      sync: '/role/sync-portal/',
     },
     users: {
       list: '/user/read/',

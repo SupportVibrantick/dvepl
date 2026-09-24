@@ -47,6 +47,10 @@ export const hrmsApi = {
   employees: {
     ...crud(API_ENDPOINTS.hrms.employees),
     sync: () => apiClient.post("/employee/sync").then(res => res.data),
+    syncPortal: (limit?: number) =>
+      apiClient
+        .post("/employee/sync-portal", limit ? { limit } : {})
+        .then((res) => res.data),
   },
   attendance: crud(API_ENDPOINTS.hrms.attendance), leave: crud(API_ENDPOINTS.hrms.leave),
   salary: crud(API_ENDPOINTS.hrms.salary), holidays: crud(API_ENDPOINTS.hrms.holidays),
@@ -63,7 +67,14 @@ export const hrmsApi = {
 export const crmApi = {
   customers: {
     ...crud(API_ENDPOINTS.crm.customers),
-    sync: () => apiClient.post(API_ENDPOINTS.crm.customers.sync).then(res => res.data),
+    sync: (limit?: number) =>
+      apiClient
+        .post(API_ENDPOINTS.crm.customers.sync, limit ? { limit } : {})
+        .then((res) => res.data),
+    syncAll: () =>
+      apiClient
+        .post(API_ENDPOINTS.crm.customers.sync, { all: true })
+        .then((res) => res.data),
   },
 
   leads: crud(API_ENDPOINTS.crm.leads),
@@ -157,7 +168,17 @@ export const securityApi = {
       }).then(res => res.data);
     }
   },
-  roles: crud(API_ENDPOINTS.security.roles),
+  roles: {
+    ...crud(API_ENDPOINTS.security.roles),
+    sync: (limit?: number) =>
+      apiClient
+        .post((API_ENDPOINTS.security.roles as any).sync, limit ? { limit } : {})
+        .then((res) => res.data),
+    syncAll: () =>
+      apiClient
+        .post((API_ENDPOINTS.security.roles as any).sync, { all: true })
+        .then((res) => res.data),
+  },
   settings: {
     read: () => apiClient.get(API_ENDPOINTS.security.settings.read).then(res => res.data.data),
     update: (data: any) => apiClient.post(API_ENDPOINTS.security.settings.update, data).then(res => res.data.data),

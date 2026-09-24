@@ -248,7 +248,7 @@ export default async function assignSalesOrderRoute(
               if (!employee) {
                 const nameParts = (user.name || "Team Member").trim().split(" ");
                 const firstName = nameParts[0] || "Team";
-                const lastName = nameParts.slice(1).join(" ") || "Member";
+                const lastName = nameParts.slice(1).join(" ") || "";
                 const code = `EMP-${user.id.slice(0, 6).toUpperCase()}`;
                 const existingWithCode = await tx.employee.findFirst({
                   where: { employeeCode: code },

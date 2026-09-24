@@ -174,7 +174,7 @@ async function adminUserBulkUploadRoutes(
               // Create a brand new employee and contact record automatically
               const nameParts = (userData.name || "").trim().split(/\s+/);
               const firstName = nameParts[0] || "Employee";
-              const lastName = nameParts.slice(1).join(" ") || "Member";
+              const lastName = nameParts.slice(1).join(" ") || "";
 
               let designationId: string | null = null;
               if (userData.designation) {

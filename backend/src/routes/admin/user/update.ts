@@ -187,7 +187,7 @@ async function updateUserRoute(
             if (name) {
               const nameParts = name.trim().split(/\s+/);
               updateData.firstName = nameParts[0] || "Employee";
-              updateData.lastName = nameParts.slice(1).join(" ") || "Member";
+              updateData.lastName = nameParts.slice(1).join(" ") || "";
             }
             if (designation !== undefined) {
               let designationId: string | null = null;

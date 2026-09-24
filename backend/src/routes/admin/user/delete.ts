@@ -64,6 +64,17 @@ async function deleteUserRoute(
           });
         }
 
+        // Keep the linked employee record but detach the relationship so the
+        // employee (and its history) survives the user deletion.
+        await fastify.prisma.employee.updateMany({
+          where: {
+            userId: id,
+          },
+          data: {
+            userId: null,
+          },
+        });
+
         await fastify.prisma.user.update({
           where: {
             id,

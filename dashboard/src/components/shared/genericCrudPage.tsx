@@ -164,6 +164,19 @@ interface GenericCrudPageProps<
    */
   syncAction?: {
     label: string;
+    run: (limit?: number) => Promise<{ syncedCount?: number; message?: string }>;
+    limitField?: {
+      label?: string;
+      placeholder?: string;
+      defaultValue?: number;
+    };
+  };
+  /**
+   * Optional secondary sync button (e.g. "Fetch All") that calls the same
+   * source without a limit.
+   */
+  syncAllAction?: {
+    label: string;
     run: () => Promise<{ syncedCount?: number; message?: string }>;
   };
 }
@@ -553,6 +566,7 @@ export function GenericCrudPage<TRecord extends { id: string }>({
   overviewHiddenFields = [],
   relationManager,
   syncAction,
+  syncAllAction,
 }: GenericCrudPageProps<TRecord>) {
   const [searchParams] = useSearchParams();
   const globalStore = useERPStore();
@@ -588,6 +602,12 @@ export function GenericCrudPage<TRecord extends { id: string }>({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<TRecord | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncLimit, setSyncLimit] = useState<string>(
+    syncAction?.limitField?.defaultValue
+      ? String(syncAction.limitField.defaultValue)
+      : "",
+  );
 
   // Optional Team -> Employee membership management.
   const [teamEmployees, setTeamEmployees] = useState<any[]>([]);
@@ -643,7 +663,10 @@ export function GenericCrudPage<TRecord extends { id: string }>({
     setIsSyncing(true);
     const syncToast = toast.loading("Syncing...");
     try {
-      const res = await syncAction.run();
+      const parsedLimit = parseInt(syncLimit, 10);
+      const res = await syncAction.run(
+        parsedLimit > 0 ? parsedLimit : undefined,
+      );
       const syncedCount = res?.syncedCount ?? 0;
       toast.success(
         res?.message ?? `Successfully synced ${syncedCount} records!`,
@@ -657,6 +680,28 @@ export function GenericCrudPage<TRecord extends { id: string }>({
       );
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    if (!syncAllAction) return;
+    setIsSyncingAll(true);
+    const syncToast = toast.loading("Syncing...");
+    try {
+      const res = await syncAllAction.run();
+      const syncedCount = res?.syncedCount ?? 0;
+      toast.success(
+        res?.message ?? `Successfully synced ${syncedCount} records!`,
+        { id: syncToast },
+      );
+      await loadRecords();
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.message ?? "Sync failed.",
+        { id: syncToast },
+      );
+    } finally {
+      setIsSyncingAll(false);
     }
   };
 
@@ -1496,17 +1541,65 @@ export function GenericCrudPage<TRecord extends { id: string }>({
             Manage {pluralName.toLowerCase()}.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {syncAction && (
+<div className="flex items-center gap-2">
+          {syncAction?.limitField ? (
+            <div className="flex items-center gap-2 rounded-xl border border-foreground/40 px-2.5 py-1 bg-muted/30">
+              <>
+                {syncAction.limitField.label && (
+                  <Label
+                    htmlFor="sync-limit-input"
+                    className="text-xs font-semibold text-muted-foreground whitespace-nowrap"
+                  >
+                    {syncAction.limitField.label}
+                  </Label>
+                )}
+                <Input
+                  id="sync-limit-input"
+                  type="number"
+                  min={1}
+                  value={syncLimit}
+                  onChange={(e) => setSyncLimit(e.target.value)}
+                  placeholder={syncAction.limitField.placeholder}
+                  className="h-8 w-24 text-xs font-medium border-none shadow-none px-1.5"
+                />
+              </>
+              {syncAction && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleSync()}
+                  disabled={isSyncing}
+                  className="gap-2 h-8"
+                >
+                  <RefreshCw className={`size-4 ${isSyncing ? "animate-spin" : ""}`} />
+                  {isSyncing ? "Syncing..." : syncAction.label}
+                </Button>
+              )}
+            </div>
+          ) : (
+            syncAction && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleSync()}
+                disabled={isSyncing}
+                className="gap-2 h-8"
+              >
+                <RefreshCw className={`size-4 ${isSyncing ? "animate-spin" : ""}`} />
+                {isSyncing ? "Syncing..." : syncAction.label}
+              </Button>
+            )
+          )}
+          {syncAllAction && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void handleSync()}
-              disabled={isSyncing}
-              className="gap-2"
+              onClick={() => void handleSyncAll()}
+              disabled={isSyncingAll}
+              className="gap-2 h-9 border-primary/20 text-primary bg-primary/5"
             >
-              <RefreshCw className={`size-4 ${isSyncing ? "animate-spin" : ""}`} />
-              {isSyncing ? "Syncing..." : syncAction.label}
+              <RefreshCw className={`size-4 ${isSyncingAll ? "animate-spin" : ""}`} />
+              {isSyncingAll ? "Syncing..." : syncAllAction.label}
             </Button>
           )}
           {!readOnly && !hideAdd && canCreate && (

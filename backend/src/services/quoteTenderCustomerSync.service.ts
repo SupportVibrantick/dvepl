@@ -106,3 +106,105 @@ export async function syncCustomersFromQuoteTender(
 
   return syncedCustomers;
 }
+
+function isPortalActive(status: unknown): boolean {
+  if (status === null || status === undefined) return true;
+  if (typeof status === "number") return status === 1;
+  const s = String(status).trim().toLowerCase();
+  return s === "1" || s === "true" || s === "active";
+}
+
+function portalLocation(customer: any): string | null {
+  const parts = [
+    customer.city_name,
+    customer.city,
+    customer.state_name,
+    customer.state_code,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+/**
+ * Syncs Customer records from the Quote Tender portal `/customers.php` API.
+ *
+ * Each portal customer record maps to a local Customer (business keyed on
+ * `firm_name`, falling back to `name`) plus a primary ContactPerson holding
+ * the contact's name / mobile / email.
+ */
+export async function syncCustomersFromPortal(
+  prisma: PrismaClient,
+  companyId: string,
+  customers: any[]
+) {
+  const syncedCustomers: any[] = [];
+
+  for (const record of customers) {
+    const firm = String(record.firm_name || "").trim();
+    const contactName = String(record.name || "").trim();
+    const companyKey = firm || contactName;
+
+    if (!companyKey) continue;
+
+    const phone = String(record.mobile || record.phone || "").trim();
+    const email = String(record.email_id || record.email || "").trim();
+    const location = portalLocation(record);
+
+    let customer = await prisma.customer.findFirst({
+      where: { companyId, name: companyKey, deletedAt: null },
+    });
+
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          companyId,
+          name: companyKey,
+          firmName: firm || null,
+          billingAddress: location,
+          shippingAddress: location,
+          isActive: isPortalActive(record.status),
+        },
+      });
+    } else {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          firmName: firm || customer.firmName,
+          billingAddress: customer.billingAddress || location,
+          shippingAddress: customer.shippingAddress || location,
+          isActive: isPortalActive(record.status),
+        },
+      });
+    }
+
+    if (contactName || phone || email) {
+      const existingContact = await prisma.contactPerson.findFirst({
+        where: { customerId: customer.id, isPrimary: true, deletedAt: null },
+      });
+
+      if (existingContact) {
+        await prisma.contactPerson.update({
+          where: { id: existingContact.id },
+          data: {
+            name: contactName || existingContact.name,
+            phone: phone || existingContact.phone,
+            email: email || existingContact.email,
+          },
+        });
+      } else {
+        await prisma.contactPerson.create({
+          data: {
+            customerId: customer.id,
+            name: contactName || "Primary Contact",
+            phone: phone || null,
+            email: email || null,
+            isPrimary: true,
+          },
+        });
+      }
+    }
+
+    syncedCustomers.push(customer);
+  }
+
+  return syncedCustomers;
+}

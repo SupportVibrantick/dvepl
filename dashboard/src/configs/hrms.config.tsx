@@ -27,7 +27,7 @@ export const employeesConfig = {
       .string()
       .min(2, "Employee Code must be at least 2 characters"),
     firstName: z.string().min(2, "First Name must be at least 2 characters"),
-    lastName: z.string().min(1, "Last Name is required"),
+    lastName: z.string().optional(),
     gender: z.string().optional().nullable(),
 
     branchId: z.string().optional().nullable(),
@@ -60,6 +60,16 @@ export const employeesConfig = {
     run: async () => {
       const res = await hrmsApi.employees.sync();
       return res as any;
+    },
+  },
+  syncAllAction: {
+    label: "Fetch Staff from Portal",
+    run: async () => {
+      const res = await hrmsApi.employees.syncPortal();
+      return {
+        syncedCount: res?.syncedCount ?? 0,
+        message: res?.message ?? 'Staff synced from portal.',
+      };
     },
   },
   columns: [
