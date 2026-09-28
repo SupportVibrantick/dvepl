@@ -6,6 +6,7 @@ import {
 } from "fastify";
 
 import { adminLogs } from "../../../services/logger/contextLogger";
+import { nextEmployeeCode } from "../../../utils/employeeCode";
 
 const isAdminRole = (roleName?: string): boolean =>
   Boolean(
@@ -78,24 +79,9 @@ async function syncEmployeeRoutes(
           (user) => !user.employee
         );
 
-        const existingEmployees =
-          await fastify.prisma.employee.findMany({
-            where: {
-              companyId,
-              deletedAt: null,
-            },
-            select: {
-              employeeCode: true,
-            },
-          });
-
-        const usedCodes = new Set(
-          existingEmployees.map((emp) => emp.employeeCode)
-        );
-
         const createdEmployees: any[] = [];
         const fixedEmployees: any[] = [];
-        let sequence = existingEmployees.length + 1;
+        const reservedCodes = new Set<string>();
 
         // Fix already-linked employees that were auto-created with the old
         // "Member" fallback for single-word names (e.g. "aaditya Member").
@@ -118,12 +104,10 @@ async function syncEmployeeRoutes(
         }
 
         for (const user of usersToSync) {
-          let employeeCode = "";
-          do {
-            employeeCode = `EMP-${String(sequence).padStart(4, "0")}`;
-            sequence++;
-          } while (usedCodes.has(employeeCode));
-          usedCodes.add(employeeCode);
+          const employeeCode = await nextEmployeeCode(
+            fastify.prisma,
+            reservedCodes
+          );
 
           const nameParts = (user.name || "").trim().split(/\s+/);
           const firstName = nameParts[0] || "Employee";

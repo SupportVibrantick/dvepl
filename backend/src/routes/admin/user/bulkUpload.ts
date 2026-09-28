@@ -7,6 +7,7 @@ import {
 import * as XLSX from "xlsx";
 import { adminLogs } from "../../../services/logger/contextLogger";
 import { hashPassword } from "../../../utils/hashPassword";
+import { nextEmployeeCode } from "../../../utils/employeeCode";
 
 async function adminUserBulkUploadRoutes(
   fastify: FastifyInstance,
@@ -189,10 +190,7 @@ async function adminUserBulkUploadRoutes(
                 }
               }
 
-              const employeeCount = await tx.employee.count({
-                where: { companyId }
-              });
-              const employeeCode = `EMP-${(employeeCount + 1).toString().padStart(4, "0")}`;
+              const employeeCode = await nextEmployeeCode(tx);
 
               const newEmp = await tx.employee.create({
                 data: {

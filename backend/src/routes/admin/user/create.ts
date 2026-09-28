@@ -7,6 +7,7 @@ import {
 import { adminLogs } from "../../../services/logger/contextLogger";
 import { createUserSchema } from "../../../schemas/user/auth/user.schema";
 import { hashPassword } from "../../../utils/hashPassword";
+import { nextEmployeeCode } from "../../../utils/employeeCode";
 
 async function createUserRoute(
   fastify: FastifyInstance,
@@ -214,10 +215,7 @@ async function createUserRoute(
                 }
               }
 
-              const employeeCount = await tx.employee.count({
-                where: { companyId }
-              });
-              const employeeCode = `EMP-${(employeeCount + 1).toString().padStart(4, "0")}`;
+              const employeeCode = await nextEmployeeCode(tx);
 
               const newEmp = await tx.employee.create({
                 data: {

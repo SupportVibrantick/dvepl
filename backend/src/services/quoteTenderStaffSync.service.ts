@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../utils/hashPassword";
+import { nextEmployeeCode } from "../utils/employeeCode";
 
 function isStudioActive(status: unknown): boolean {
   if (status === null || status === undefined) return true;
@@ -27,6 +28,7 @@ export async function syncStaffToUsers(
 ) {
   const syncedUsers: any[] = [];
   const createdUserCounts = { created: 0, updated: 0, skipped: 0 };
+  const reservedCodes = new Set<string>();
 
   const defaultRole = await pickDefaultRole(prisma, companyId);
 
@@ -40,7 +42,23 @@ export async function syncStaffToUsers(
       continue;
     }
 
-    const existing = await findUserByEmailOrPhone(prisma, email, phone);
+    const existing = await findUserByEmailOrPhone(prisma, companyId, email, phone);
+
+    // `User.email` and `User.phone` are globally unique, so a portal login that
+    // already belongs to a different company can neither be matched nor
+    // created here. Skip it instead of re-pointing another tenant's user.
+    if (!existing) {
+      const foreignOwner = await findUserInOtherCompany(
+        prisma,
+        companyId,
+        email,
+        phone
+      );
+      if (foreignOwner) {
+        createdUserCounts.skipped++;
+        continue;
+      }
+    }
 
     if (existing) {
       const updated = await prisma.user.update({
@@ -70,7 +88,7 @@ export async function syncStaffToUsers(
       }
 
       createdUserCounts.updated++;
-      syncedUsers.push(updated);
+      syncedUsers.push(withoutPasswordHash(updated));
       continue;
     }
 
@@ -108,7 +126,11 @@ export async function syncStaffToUsers(
 
       if (phone) {
         const existingContact = await tx.employeeContact.findFirst({
-          where: { type: "PHONE", value: phone },
+          where: {
+            type: "PHONE",
+            value: phone,
+            employee: { companyId },
+          },
         });
         if (existingContact) {
           await tx.employee.update({
@@ -123,8 +145,7 @@ export async function syncStaffToUsers(
       const firstName = nameParts[0] || "Staff";
       const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
 
-      const employeeCount = await tx.employee.count({ where: { companyId } });
-      const employeeCode = `EMP-${(employeeCount + 1).toString().padStart(4, "0")}`;
+      const employeeCode = await nextEmployeeCode(tx, reservedCodes);
 
       const emp = await tx.employee.create({
         data: {
@@ -184,29 +205,65 @@ export async function syncStaffToUsers(
     });
 
     createdUserCounts.created++;
-    syncedUsers.push(user);
+    syncedUsers.push(withoutPasswordHash(user));
   }
 
   return { syncedUsers, createdUserCounts };
 }
 
+/**
+ * The route returns these rows to the browser, and the automatic audit trail
+ * stores the whole response body, so the password hash must never leave the
+ * service.
+ */
+function withoutPasswordHash(user: any) {
+  const { passwordHash, ...safe } = user ?? {};
+  return safe;
+}
+
 async function findUserByEmailOrPhone(
   prisma: PrismaClient,
+  companyId: string,
   email: string,
   phone: string
 ) {
   if (email) {
     const byEmail = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: "insensitive" } },
+      where: {
+        companyId,
+        email: { equals: email, mode: "insensitive" },
+      },
     });
     if (byEmail) return byEmail;
   }
   if (phone) {
     return prisma.user.findFirst({
-      where: { phone: { equals: phone, mode: "insensitive" } },
+      where: {
+        companyId,
+        phone: { equals: phone, mode: "insensitive" },
+      },
     });
   }
   return null;
+}
+
+async function findUserInOtherCompany(
+  prisma: PrismaClient,
+  companyId: string,
+  email: string,
+  phone: string
+) {
+  if (!email && !phone) return null;
+  return prisma.user.findFirst({
+    where: {
+      NOT: { companyId },
+      OR: [
+        ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : []),
+        ...(phone ? [{ phone: { equals: phone, mode: "insensitive" as const } }] : []),
+      ],
+    },
+    select: { id: true },
+  });
 }
 
 async function pickDefaultRole(prisma: PrismaClient, companyId: string) {
