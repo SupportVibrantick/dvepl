@@ -62,16 +62,6 @@ export const employeesConfig = {
       return res as any;
     },
   },
-  syncAllAction: {
-    label: "Fetch Staff from Portal",
-    run: async () => {
-      const res = await hrmsApi.employees.syncPortal();
-      return {
-        syncedCount: res?.syncedCount ?? 0,
-        message: res?.message ?? 'Staff synced from portal.',
-      };
-    },
-  },
   columns: [
     { accessorKey: "employeeCode", header: sortableHeader("Emp Code") },
     {
