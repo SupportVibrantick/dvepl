@@ -71,10 +71,10 @@ async function readUserByIdRoute(
                       ? mainRole.pageAccess
                       : (up?.pageAccess || []));
                 const actionPermissions = hasOverride
-                  ? (up?.actionPermissions || { create: true, edit: true, delete: false, export: true })
+                  ? (up?.actionPermissions || { create: true, edit: true, delete: true, export: true })
                   : (mainRole?.actionPermissions && Object.keys(mainRole.actionPermissions).length > 0
                       ? mainRole.actionPermissions
-                      : (up?.actionPermissions || { create: true, edit: true, delete: false, export: true }));
+                      : (up?.actionPermissions || { create: true, edit: true, delete: true, export: true }));
 
                   return reply.send({
                     success: true,

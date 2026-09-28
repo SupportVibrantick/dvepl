@@ -147,7 +147,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           role: userProfile.roles?.[0] || "",
           designation: userProfile.designation || "Team Member",
           pageAccess: userProfile.pageAccess || [],
-          actionPermissions: userProfile.actionPermissions || { create: true, edit: true, delete: false, export: true },
+          actionPermissions: userProfile.actionPermissions || { create: true, edit: true, delete: true, export: true },
           roles: (userProfile.roles || []).map((rName: string) => ({
             id: rName,
             name: rName

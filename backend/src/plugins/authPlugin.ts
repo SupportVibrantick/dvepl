@@ -10,7 +10,7 @@ type ModuleActions = Record<ActionName, boolean>;
 const legacyActionDefaults: ModuleActions = {
   create: true,
   edit: true,
-  delete: false,
+  delete: true,
   export: true,
 };
 
@@ -38,7 +38,7 @@ const getModuleActions = (value: unknown, moduleKey: string): ModuleActions => {
   }
 
   const moduleActions = isRecord(value) ? value[moduleKey] : undefined;
-  if (!isRecord(moduleActions)) return { create: false, edit: false, delete: false, export: false };
+  if (!isRecord(moduleActions)) return { create: false, edit: false, delete: true, export: false };
 
   return {
     create: moduleActions.create === true,
@@ -339,10 +339,10 @@ async function authPlugin(fastify: FastifyInstance) {
               : (up?.pageAccess as string[] || []));
 
         const resolvedActionPermissions = hasOverride
-          ? (up?.actionPermissions || { create: true, edit: true, delete: false, export: true })
+          ? (up?.actionPermissions || { create: true, edit: true, delete: true, export: true })
           : (Object.keys(mergedRoleActionPermissions).length > 0
               ? mergedRoleActionPermissions
-              : (up?.actionPermissions || { create: true, edit: true, delete: false, export: true }));
+              : (up?.actionPermissions || { create: true, edit: true, delete: true, export: true }));
 
         const tokenUser = {
           id: decoded.userId,

@@ -46,7 +46,7 @@ export function LoginPage() {
         role: response.user.roles?.[0] || "",
         designation: response.user.designation || "Team Member",
         pageAccess: response.user.pageAccess || [],
-        actionPermissions: response.user.actionPermissions || { create: true, edit: true, delete: false, export: true },
+        actionPermissions: response.user.actionPermissions || { create: true, edit: true, delete: true, export: true },
         roles: (response.user.roles || []).map((rName: string) => ({
           id: rName,
           name: rName

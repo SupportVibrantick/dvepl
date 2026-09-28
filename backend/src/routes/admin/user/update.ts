@@ -251,7 +251,7 @@ async function updateUserRoute(
               designation: designation || "Team Member",
               hasOverride: profileOverride,
               pageAccess: pageAccess || [],
-              actionPermissions: actionPermissions || { create: true, edit: true, delete: false, export: true },
+              actionPermissions: actionPermissions || { create: true, edit: true, delete: true, export: true },
             },
             update: {
               ...(pageAccess !== undefined ? { pageAccess } : {}),

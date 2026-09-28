@@ -198,8 +198,8 @@ export async function syncStaffToUsers(
             : ["dashboard", "orders"],
         actionPermissions:
           roleActionPermissions || {
-            dashboard: { create: false, edit: false, delete: false, export: false },
-            orders: { create: true, edit: true, delete: false, export: true },
+            dashboard: { create: false, edit: false, delete: true, export: false },
+            orders: { create: true, edit: true, delete: true, export: true },
           },
       },
     });

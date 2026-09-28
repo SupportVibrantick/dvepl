@@ -246,9 +246,9 @@ async function adminUserBulkUploadRoutes(
                 ? rolePageAccess
                 : ["dashboard", "vendors", "orders"],
               actionPermissions: roleActionPermissions || {
-                dashboard: { create: false, edit: false, delete: false, export: false },
-                vendors: { create: true, edit: true, delete: false, export: true },
-                orders: { create: true, edit: true, delete: false, export: true },
+                dashboard: { create: false, edit: false, delete: true, export: false },
+                vendors: { create: true, edit: true, delete: true, export: true },
+                orders: { create: true, edit: true, delete: true, export: true },
               }
             }});
 

@@ -341,7 +341,7 @@ export function SettingsPage() {
           actionPermissions: u.actionPermissions || {
             create: true,
             edit: true,
-            delete: false,
+            delete: true,
             export: true,
           },
           teamId: u.teamId || null,
@@ -361,7 +361,7 @@ export function SettingsPage() {
           actionPermissions: {
             create: true,
             edit: true,
-            delete: false,
+            delete: true,
             export: true,
           },
         }));
@@ -761,28 +761,12 @@ export function SettingsPage() {
   // The editor starts in Role Permissions mode if the role exists in the database.
   // Otherwise, it falls back to User Overrides mode.
   const handleOpenPermModal = async (user: UserItem) => {
-    const storeObj = useERPStore.getState();
-    const hasRoleInDb = storeObj.roles?.some((r: any) => r.name === user.role);
-
-    if (hasRoleInDb) {
-      setPermissionMode("role");
-      setSelectedPermissionRole(user.role);
-    } else {
-      setPermissionMode("user");
-      setSelectedPermissionRole("");
-    }
+    setPermissionMode("user");
     setSelectedPermissionUserId(user.id);
-    setPermissionRoleSearch("");
+    setSelectedPermissionRole(user.role || "");
     setPermissionUserSearch("");
     setPermUser(user);
-    // Role mode must initialize from the ROLE record, never from a member's
-    // (possibly overridden) permissions — otherwise one user's override could
-    // be silently propagated onto the whole role.
-    initializePermissionState(
-      hasRoleInDb
-        ? (storeObj.roles?.find((r: any) => r.name === user.role) ?? user)
-        : user,
-    );
+    initializePermissionState(user);
     setIsPermModalOpen(true);
   };
 
@@ -841,107 +825,47 @@ export function SettingsPage() {
         (key) => pageAccessState[key],
       );
 
-      // Role mode is the standard PRBAC path: the role owns the permission set.
-      // Until a dedicated role-permission endpoint exists, the existing user update
-      // endpoint is used to keep every user in that role synchronized.
-      const targetUsers =
-        permissionMode === "role"
-          ? users.filter((user) => user.role === selectedPermissionRole)
-          : [permUser];
-
       const permissionPayload = {
         pageAccess,
         actionPermissions: actionPermsState,
       };
 
-      if (permissionMode === "role") {
-        const storeRoles = store.roles || [];
-        const roleObj = storeRoles.find(
-          (role: any) => role.name === selectedPermissionRole,
-        );
-
-        if (!roleObj) {
-          toast.error("Role not found");
-          return;
-        }
-
-        if (securityApi.roles.update) {
-          await securityApi.roles.update(roleObj.id, {
-            name: roleObj.name,
-            ...permissionPayload,
-          });
-        }
-
-        // Role permissions are the source of truth for every member of the role.
-        // Clear per-user overrides so the newly saved policy actually applies to
-        // all of them (previously an override was permanent and the role edit
-        // silently stopped affecting overridden users).
-        await Promise.all(
-          targetUsers.map((user) =>
-            securityApi.users.update
-              ? securityApi.users
-                  .update(user.id, { hasOverride: false })
-                  .catch(() => {
-                    // A user's override reset is best-effort; the role itself is saved.
-                  })
-              : Promise.resolve(),
-          ),
-        );
-      } else if (securityApi.users.update) {
+      if (securityApi.users.update) {
         await securityApi.users.update(permUser.id, {
           ...permissionPayload,
           hasOverride: true,
         });
       }
 
-      // Sync the role record so the UI reflects the saved role permissions even
-      // when the role currently has no members (bug: role edit was blocked).
-      useERPStore.setState({
-        roles: (store.roles || []).map((role: any) =>
-          permissionMode === "role" && role.name === selectedPermissionRole
-            ? { ...role, ...permissionPayload }
-            : role,
-        ),
-      });
-
-      const targetIds = new Set(targetUsers.map((user) => user.id));
       const updatedUsers = users.map((user) =>
-        targetIds.has(user.id)
+        user.id === permUser.id
           ? {
               ...user,
               pageAccess,
               actionPermissions: actionPermsState,
-              hasOverride:
-                permissionMode === "role" ? false : user.hasOverride,
+              hasOverride: true,
             }
           : user,
       );
-
       setUsers(updatedUsers);
 
-      // Sync Zustand so permission-dependent UI changes immediately.
       const updatedStoreUsers = store.users.map((user: any) =>
-        targetIds.has(user.id)
+        user.id === permUser.id
           ? {
               ...user,
               pageAccess,
               actionPermissions: actionPermsState,
-              hasOverride:
-                permissionMode === "role" ? false : user.hasOverride,
+              hasOverride: true,
             }
           : user,
       );
       useERPStore.setState({ users: updatedStoreUsers });
 
-      toast.success(
-        permissionMode === "role"
-          ? `${roleLabel(selectedPermissionRole)} permissions updated`
-          : "User permission override updated",
-      );
+      toast.success(`User permissions updated for ${permUser.name}`);
       setIsPermModalOpen(false);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to save permissions");
+      toast.error("Failed to save user permissions");
     }
   };
 
@@ -4316,174 +4240,77 @@ export function SettingsPage() {
                 </button>
               </div>
 
-              {/* Permission mode */}
+              {/* Permission mode banner */}
               <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
-                <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPermissionMode("role");
-                      const roleUser = users.find(
-                        (user) => user.role === selectedPermissionRole,
-                      );
-                      if (roleUser) initializePermissionState(roleUser);
-                    }}
-                    className={`rounded-md px-4 py-2 text-[11px] font-bold transition ${
-                      permissionMode === "role"
-                        ? "bg-card text-primary shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Role Permissions
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPermissionMode("user");
-                      const currentUser = users.find(
-                        (user) => user.id === selectedPermissionUserId,
-                      );
-                      if (currentUser) initializePermissionState(currentUser);
-                    }}
-                    className={`rounded-md px-4 py-2 text-[11px] font-bold transition ${
-                      permissionMode === "user"
-                        ? "bg-card text-primary shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    User Overrides
-                  </button>
+                <div className="inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-bold text-primary">
+                  👤 User Permissions: {permUser.name} ({roleLabel(permUser.role || "user")})
                 </div>
-
                 <div className="text-[10px] text-muted-foreground">
-                  {permissionMode === "role"
-                    ? `Changes apply to users assigned to ${roleLabel(selectedPermissionRole)}`
-                    : `Override permissions for ${permUser.name}`}
+                  Configuring individual permissions for {permUser.name} ({permUser.email})
                 </div>
               </div>
             </div>
 
             {/* Body */}
             <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
-              {/* Left navigation */}
+              {/* Left navigation — Users list */}
               <aside className="min-h-0 overflow-y-auto border-r border-border bg-card">
-                {permissionMode === "role" ? (
-                  <>
-                    <div className="sticky top-0 z-20 border-b border-border bg-card p-4">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Roles
-                      </div>
-                      <input
-                        value={permissionRoleSearch}
-                        onChange={(e) => setPermissionRoleSearch(e.target.value)}
-                        placeholder="Search roles..."
-                        className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-                      />
-                    </div>
-                    <div className="p-2">
-                      {permissionRoles
-                        .filter((role) =>
-                          roleLabel(role)
-                            .toLowerCase()
-                            .includes(permissionRoleSearch.toLowerCase()),
-                        )
-                        .map((role) => {
-                          const roleUsers = users.filter((user) => user.role === role);
-                          const selected = role === selectedPermissionRole;
-                          const rolePermissionSource = roleUsers[0];
-                          const count = rolePermissionSource?.pageAccess?.length ?? 0;
-
-                          return (
-                            <button
-                              key={role}
-                              type="button"
-                              onClick={() => handleSelectPermissionRole(role)}
-                              className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
-                                selected
-                                  ? "border-primary/30 bg-primary/5"
-                                  : "border-transparent hover:border-border hover:bg-muted/40"
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-xs font-bold text-foreground truncate">
-                                    {roleLabel(role)}
-                                  </div>
-                                  <div className="mt-1 text-[10px] text-muted-foreground">
-                                    {roleUsers.length} user{roleUsers.length === 1 ? "" : "s"} • {count} resources
-                                  </div>
-                                </div>
-                                <span
-                                  className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
-                                    selected ? "bg-primary" : "bg-muted-foreground/30"
-                                  }`}
-                                />
+                <div className="sticky top-0 z-20 border-b border-border bg-card p-4">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Users ({users.length})
+                  </div>
+                  <input
+                    value={permissionUserSearch}
+                    onChange={(e) => setPermissionUserSearch(e.target.value)}
+                    placeholder="Search users..."
+                    className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="p-2">
+                  {users
+                    .filter((user) => {
+                      const q = permissionUserSearch.toLowerCase();
+                      return (
+                        user.name.toLowerCase().includes(q) ||
+                        user.email.toLowerCase().includes(q) ||
+                        user.role.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((user) => {
+                      const selected = user.id === selectedPermissionUserId;
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => handleSelectPermissionUser(user)}
+                          className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
+                            selected
+                              ? "border-primary/30 bg-primary/5"
+                              : "border-transparent hover:border-border hover:bg-muted/40"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">
+                              {user.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-foreground truncate">
+                                {user.name}
                               </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="sticky top-0 z-20 border-b border-border bg-card p-4">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Users
-                      </div>
-                      <input
-                        value={permissionUserSearch}
-                        onChange={(e) => setPermissionUserSearch(e.target.value)}
-                        placeholder="Search users..."
-                        className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
-                      />
-                    </div>
-                    <div className="p-2">
-                      {users
-                        .filter((user) => {
-                          const q = permissionUserSearch.toLowerCase();
-                          return (
-                            user.name.toLowerCase().includes(q) ||
-                            user.email.toLowerCase().includes(q) ||
-                            user.role.toLowerCase().includes(q)
-                          );
-                        })
-                        .map((user) => {
-                          const selected = user.id === selectedPermissionUserId;
-                          return (
-                            <button
-                              key={user.id}
-                              type="button"
-                              onClick={() => handleSelectPermissionUser(user)}
-                              className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
-                                selected
-                                  ? "border-primary/30 bg-primary/5"
-                                  : "border-transparent hover:border-border hover:bg-muted/40"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <div className="h-8 w-8 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">
-                                  {user.name
-                                    .split(" ")
-                                    .map((part) => part[0])
-                                    .join("")
-                                    .slice(0, 2)
-                                    .toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="text-xs font-bold text-foreground truncate">
-                                    {user.name}
-                                  </div>
-                                  <div className="mt-0.5 text-[10px] text-muted-foreground truncate">
-                                    {roleLabel(user.role)}
-                                  </div>
-                                </div>
+                              <div className="mt-0.5 text-[10px] text-muted-foreground truncate">
+                                {roleLabel(user.role)}
                               </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </>
-                )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
               </aside>
 
               {/* Main permission editor */}
@@ -4494,17 +4321,13 @@ export function SettingsPage() {
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div>
                         <div className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                          {permissionMode === "role" ? "Role" : "User Override"}
+                          User Permissions
                         </div>
                         <h3 className="mt-1 text-xl font-bold text-foreground">
-                          {permissionMode === "role"
-                            ? roleLabel(selectedPermissionRole)
-                            : permUser.name}
+                          {permUser.name}
                         </h3>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {permissionMode === "role"
-                            ? `${users.filter((user) => user.role === selectedPermissionRole).length} users inherit this permission policy.`
-                            : `Overrides inherited role permissions for ${permUser.name}.`}
+                          Configure page access and action permissions for {permUser.name} ({permUser.email}).
                         </p>
                       </div>
                       <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
@@ -4610,7 +4433,12 @@ export function SettingsPage() {
                                           ...pageAccessState,
                                           [module.key]: enabled,
                                         });
-                                        if (!enabled) {
+                                        if (enabled) {
+                                          setActionPermsState({
+                                            ...actionPermsState,
+                                            [module.key]: { create: true, edit: true, delete: true, export: true },
+                                          });
+                                        } else {
                                           setActionPermsState({
                                             ...actionPermsState,
                                             [module.key]: NO_ACTIONS,
@@ -4771,16 +4599,7 @@ export function SettingsPage() {
             {/* Footer */}
             <div className="shrink-0 flex items-center justify-between gap-4 border-t border-border bg-card px-5 md:px-6 py-4">
               <div className="text-[10px] text-muted-foreground">
-                {permissionMode === "role" ? (
-                  <>
-                    Saving for <span className="font-semibold text-foreground">{roleLabel(selectedPermissionRole)}</span> role
-                    ({users.filter((user) => user.role === selectedPermissionRole).length} users)
-                  </>
-                ) : (
-                  <>
-                    Saving override for <span className="font-semibold text-foreground">{permUser.name}</span>
-                  </>
-                )}
+                Saving permissions for <span className="font-semibold text-foreground">{permUser.name}</span> ({permUser.email})
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -4789,20 +4608,11 @@ export function SettingsPage() {
                 >
                   Cancel
                 </button>
-                {permissionMode === "user" && (
-                  <button
-                    onClick={handleResetUserOverride}
-                    className="px-4 py-2.5 border border-destructive/30 rounded-lg bg-background text-xs font-bold text-destructive hover:bg-destructive/5 transition"
-                    title="Stop overriding the role policy — this user will inherit role permissions again"
-                  >
-                    Reset to Role
-                  </button>
-                )}
                 <button
                   onClick={savePermissions}
                   className="px-5 py-2.5 bg-primary text-white font-bold rounded-lg text-xs hover:bg-primary/95 transition shadow-sm"
                 >
-                  {permissionMode === "role" ? "Save Role Permissions" : "Save Override"}
+                  Save User Permissions
                 </button>
               </div>
             </div>

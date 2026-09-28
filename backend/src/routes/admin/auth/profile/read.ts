@@ -67,10 +67,10 @@ async function readProfileRoute(
             : (up?.pageAccess as string[]) || [];
 
         const resolvedActionPermissions = hasOverride
-          ? up?.actionPermissions || { create: true, edit: true, delete: false, export: true }
+          ? up?.actionPermissions || { create: true, edit: true, delete: true, export: true }
           : mainRole?.actionPermissions && Object.keys(mainRole.actionPermissions).length > 0
             ? mainRole.actionPermissions
-            : up?.actionPermissions || { create: true, edit: true, delete: false, export: true };
+            : up?.actionPermissions || { create: true, edit: true, delete: true, export: true };
 
         adminLogs.info("Profile fetched", {
           userId,

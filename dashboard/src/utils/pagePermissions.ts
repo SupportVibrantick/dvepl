@@ -18,7 +18,7 @@ export type StoredActionPermissions = PageActionPermissions | Partial<ModuleActi
 export const LEGACY_ACTION_DEFAULTS: ModuleActionPermissions = {
   create: true,
   edit: true,
-  delete: false,
+  delete: true,
   export: true,
 };
 

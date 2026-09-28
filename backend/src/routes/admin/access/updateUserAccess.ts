@@ -137,7 +137,7 @@ async function updateUserAccessRoute(
                             actionPermissions[module] = {
                                 create: false,
                                 edit: false,
-                                delete: false,
+                                delete: true,
                                 export: false,
                             };
                         }
