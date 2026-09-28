@@ -5,6 +5,7 @@ import {
   FastifyRequest,
 } from "fastify";
 import { adminLogs } from "../../../services/logger/contextLogger";
+import { hardDelete } from "../../../utils/fkSafeHardDelete";
 
 interface Query {
   module?: string;
@@ -23,6 +24,11 @@ type RecycleBinModelConfig = {
   where?: Record<string, any>;
   formatName: (record: Record<string, any>) => string;
   permanentDelete?: (fastify: FastifyInstance, id: string, adminId: string) => Promise<void>;
+  /**
+   * Required inbound foreign keys pointing at these tables are re-pointed at
+   * the acting admin instead of being deleted along with the record.
+   */
+  reassignTables?: string[];
 };
 
 const recycleBinModels: RecycleBinModelConfig[] = [
@@ -74,6 +80,10 @@ const recycleBinModels: RecycleBinModelConfig[] = [
     delegate: "user",
     select: { id: true, name: true, email: true, deletedAt: true, updatedAt: true },
     formatName: (record) => `${record.name || "User"}${record.email ? ` (${record.email})` : ""}`,
+    // Deleting a user must not cascade into business records that merely
+    // reference them, so every required inbound FK is re-pointed at the acting
+    // admin. `reassignTables` is the safety net for references not listed here.
+    reassignTables: ["users"],
     permanentDelete: async (fastify, id, adminId) => {
       await fastify.prisma.userRole.deleteMany({ where: { userId: id } });
       await fastify.prisma.userPermission.deleteMany({ where: { userId: id } });
@@ -149,8 +159,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
           )
         );
       }
-
-      await (fastify.prisma as any).user.deleteMany({ where: { id } });
     },
   },
   {
@@ -177,7 +185,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
       await fastify.prisma.leave.deleteMany({ where: { employeeId: id } });
       await fastify.prisma.salary.deleteMany({ where: { employeeId: id } });
       await fastify.prisma.taskAssignment.deleteMany({ where: { employeeId: id } });
-      await (fastify.prisma as any).employee.deleteMany({ where: { id } });
     },
   },
   {
@@ -229,8 +236,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
         });
       }
       await fastify.prisma.quotation.deleteMany({ where: { customerId: id } });
-
-      await fastify.prisma.customer.delete({ where: { id } });
     },
   },
   {
@@ -283,7 +288,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
     formatName: (record) => `${record.dveplCode || "Sales Order"}${record.partyName ? ` - ${record.partyName}` : ""}`,
     permanentDelete: async (fastify, id) => {
       await fastify.prisma.salesOrderItem.deleteMany({ where: { salesOrderId: id } });
-      await (fastify.prisma as any).salesOrder.delete({ where: { id } });
     },
   },
   {
@@ -317,7 +321,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
         data: { preferredVendorId: null },
       });
       await fastify.prisma.vendorProduct.deleteMany({ where: { vendorId: id } });
-      await (fastify.prisma as any).vendor.delete({ where: { id } });
     },
   },
   {
@@ -336,7 +339,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
       });
       await fastify.prisma.goodsReceipt.deleteMany({ where: { poId: id } });
       await fastify.prisma.purchaseOrderItem.deleteMany({ where: { poId: id } });
-      await (fastify.prisma as any).purchaseOrder.delete({ where: { id } });
     },
   },
   {
@@ -348,7 +350,6 @@ const recycleBinModels: RecycleBinModelConfig[] = [
     permanentDelete: async (fastify, id) => {
       await fastify.prisma.customFieldOption.deleteMany({ where: { customFieldId: id } });
       await fastify.prisma.customFieldValue.deleteMany({ where: { customFieldId: id } });
-      await (fastify.prisma as any).customField.delete({ where: { id } });
     },
   },
   {
@@ -469,6 +470,8 @@ const recycleBinModels: RecycleBinModelConfig[] = [
 const recycleBinModelMap = new Map(
   recycleBinModels.map((config) => [config.module, config])
 );
+
+export { recycleBinModels, recycleBinModelMap };
 
 const getDelegate = (fastify: FastifyInstance, config: RecycleBinModelConfig) => {
   const delegate = (fastify.prisma as any)[config.delegate];
@@ -609,9 +612,14 @@ export async function recycleBinRoutes(
         const adminId = (request as any).admin?.id || "";
         if (config.permanentDelete) {
           await config.permanentDelete(fastify, id, adminId);
-        } else {
-          await getDelegate(fastify, config).delete({ where: { id } });
         }
+        await hardDelete({
+          prisma: fastify.prisma,
+          delegate: config.delegate,
+          id,
+          adminId,
+          reassignTables: config.reassignTables,
+        });
 
         return reply.status(200).send({
           success: true,
@@ -645,6 +653,8 @@ export async function recycleBinRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const adminId = (request as any).admin?.id || "";
+        const failures: string[] = [];
+
         for (const config of recycleBinModels) {
           const delegate = getDelegate(fastify, config);
           const deletedRecords = await delegate.findMany({
@@ -653,12 +663,33 @@ export async function recycleBinRoutes(
           });
 
           for (const record of deletedRecords) {
-            if (config.permanentDelete) {
-              await config.permanentDelete(fastify, record.id, adminId);
-            } else {
-              await delegate.delete({ where: { id: record.id } });
+            try {
+              if (config.permanentDelete) {
+                await config.permanentDelete(fastify, record.id, adminId);
+              }
+              await hardDelete({
+                prisma: fastify.prisma,
+                delegate: config.delegate,
+                id: record.id,
+                adminId,
+                reassignTables: config.reassignTables,
+              });
+            } catch (error) {
+              failures.push(`${config.label} ${record.id}`);
+              adminLogs.error("Failed to permanently delete recycle bin item", {
+                error,
+                module: config.module,
+                id: record.id,
+              });
             }
           }
+        }
+
+        if (failures.length > 0) {
+          return reply.status(500).send({
+            success: false,
+            message: `Failed to empty recycle bin. ${failures.length} record(s) could not be removed.`,
+          });
         }
 
         return reply.status(200).send({
