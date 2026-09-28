@@ -38,7 +38,7 @@ const getModuleActions = (value: unknown, moduleKey: string): ModuleActions => {
   }
 
   const moduleActions = isRecord(value) ? value[moduleKey] : undefined;
-  if (!isRecord(moduleActions)) return { create: false, edit: false, delete: true, export: false };
+  if (!isRecord(moduleActions)) return legacyActionDefaults;
 
   return {
     create: moduleActions.create === true,

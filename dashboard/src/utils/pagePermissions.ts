@@ -58,7 +58,7 @@ export function getModuleActions(
   }
 
   const moduleActions = isRecord(actionPermissions) ? actionPermissions[moduleKey] : undefined;
-  if (!isRecord(moduleActions)) return NO_ACTIONS;
+  if (!isRecord(moduleActions)) return LEGACY_ACTION_DEFAULTS;
 
   return {
     create: moduleActions.create === true,
@@ -95,6 +95,9 @@ export function canPerformPageAction(
     const store = useERPStore.getState();
     const currentUser = store.users.find((u) => u.id === store.currentUserId) as any;
     if (isAdminUser(currentUser)) return true;
+    if (currentUser?.pageAccess && Array.isArray(currentUser.pageAccess)) {
+      if (!currentUser.pageAccess.includes(moduleKey)) return false;
+    }
   } catch (e) {
     // Fallback if store is not initialized
   }
