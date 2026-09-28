@@ -61,7 +61,7 @@ const TABLE_NAME_TO_MODULE: Record<string, string> = {
   productionPlans: "production_plans",
   workOrders: "work_orders",
   purchaseRequests: "purchase_requests",
-  purchaseOrders: "orders",
+  purchaseOrders: "purchase_orders",
   dispatches: "inventory",
 };
 

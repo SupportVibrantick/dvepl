@@ -13,17 +13,21 @@ const getRequiredPermission = (pathname: string): string | null => {
   if (pathname === '/profile') return null;
   if (pathname === '/') return 'dashboard';
   
-  // Assignment/Task pages where the backend manages row-level access:
-  // Allow all logged-in users to load the page structure.
-  if (pathname.startsWith('/export-orders')) return null;
-  if (pathname.startsWith('/tasks')) return null;
-  if (pathname.startsWith('/hrms/leaves')) return null;
-  if (pathname.startsWith('/workflow')) return null;
-  if (pathname.startsWith('/purchase/orders')) return null;
-  if (pathname.startsWith('/logistics/delivery')) return null;
-  if (pathname.startsWith('/tender/orders')) return null;
-  if (pathname.startsWith('/orders')) return null;
-  if (pathname.startsWith('/accounts')) return null;
+  if (pathname.startsWith('/export-orders')) return 'export_orders';
+  if (pathname.startsWith('/tasks')) return 'tasks';
+  if (pathname.startsWith('/hrms/leaves')) return 'leaves';
+  if (pathname.startsWith('/workflow')) return 'workflow_tracker';
+  if (pathname.startsWith('/purchase/orders')) return 'purchase_orders';
+  if (pathname.startsWith('/logistics/delivery')) return 'delivery';
+  if (pathname.startsWith('/tender/orders')) return 'orders';
+  if (pathname.startsWith('/orders')) return 'orders';
+  if (pathname.startsWith('/accounts')) return 'orders';
+  if (pathname.startsWith('/production/plans')) return 'production_plans';
+  if (pathname.startsWith('/production/work-orders')) return 'work_orders';
+  if (pathname.startsWith('/quality/inspections')) return 'inspections';
+  if (pathname.startsWith('/material/materials')) return 'materials';
+  if (pathname.startsWith('/material/categories')) return 'material_categories';
+  if (pathname.startsWith('/purchase/requests')) return 'purchase_requests';
   
   if (pathname.startsWith('/finance')) return 'finance';
   if (pathname.startsWith('/settings/custom-fields')) return 'custom_fields';
@@ -52,6 +56,8 @@ const getRequiredPermission = (pathname: string): string | null => {
     '/tender/quotations': 'quotations',
     '/tender/orders': 'orders',
     '/purchase/vendors': 'vendors',
+    '/purchase/orders': 'purchase_orders',
+    '/logistics/delivery': 'delivery',
     '/tender/boqs': 'boqs',
     '/security/roles': 'roles',
     '/security/approval-requests': 'approval_requests',
@@ -65,6 +71,9 @@ const getRequiredPermission = (pathname: string): string | null => {
     '/inventory/stocks': 'inventory',
     '/inventory/transfers': 'inventory',
     '/logistics/dispatches': 'inventory',
+    '/production/plans': 'production_plans',
+    '/production/work-orders': 'work_orders',
+    '/quality/inspections': 'inspections',
     '/audit-logs': 'audit_logs',
     '/reports': 'reports'
   };

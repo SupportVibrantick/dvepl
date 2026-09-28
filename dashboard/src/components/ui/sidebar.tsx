@@ -211,6 +211,14 @@ export default function Sidebar({
       customers: 'customers',
       orders: 'orders',
 
+      purchase_orders: 'purchase_orders',
+      purchase_requests: 'purchase_requests',
+      materials: 'materials',
+      material_categories: 'material_categories',
+      production_plans: 'production_plans',
+      work_orders: 'work_orders',
+      inspections: 'inspections',
+
       // Workflow Tracker
       workflow_tracker: 'workflow_tracker',
 

@@ -656,16 +656,20 @@ export function SettingsPage() {
     }
   };
 
-  // Permissions Modal Page List
+  // Permissions Modal Page List — strictly matching active sidebar pages
   const modulesList = [
     { key: "dashboard", label: "📊 Dashboard" },
+    { key: "tasks", label: "✅ Tasks" },
+    { key: "finance", label: "💵 Finance" },
+    { key: "workflow_tracker", label: "🔄 Workflow Tracker" },
+    { key: "reports", label: "📊 Reports" },
+    { key: "audit_logs", label: "📜 Audit Logs" },
 
     // Organization
     { key: "companies", label: "🏢 Companies" },
     { key: "branches", label: "🌿 Branches" },
     { key: "departments", label: "🌿 Departments" },
     { key: "teams", label: "👥 Teams" },
-    { key: "designations", label: "💼 Designations" },
     { key: "cost_centers", label: "💼 Cost Centers" },
 
     // HRMS
@@ -673,8 +677,6 @@ export function SettingsPage() {
     { key: "attendance", label: "⏰ Attendance" },
     { key: "leaves", label: "📅 Leaves" },
     { key: "holidays", label: "📅 Holidays" },
-    { key: "documents", label: "📄 Documents" },
-    { key: "tasks", label: "✅ Tasks" },
     { key: "roles", label: "🛡️ Roles" },
 
     // CRM
@@ -682,29 +684,11 @@ export function SettingsPage() {
     { key: "orders", label: "🛒 Orders" },
     { key: "delivery", label: "🚚 Delivery" },
     { key: "vendors", label: "🚚 Vendors" },
+    { key: "purchase_orders", label: "📄 Purchase Orders" },
     { key: "inventory", label: "📦 Inventory" },
     { key: "export_orders", label: "📤 Engineering Drawing" },
 
-    // Finance
-    { key: "finance", label: "💵 Finance / Accounts" },
-    { key: "payroll", label: "💰 Payroll" },
-
-    // Sales
-    { key: "workflow_tracker", label: "🔄 Workflow Tracker" },
-
-    // Lead Management
-    { key: "technical_clarifications", label: "❓ Technical Clarifications" },
-    { key: "sections", label: "🌿 Sections" },
-    { key: "divisions", label: "🌿 Divisions" },
-    { key: "sub_divisions", label: "👥 Sub Divisions" },
-    { key: "reference_codes", label: "📄 Reference Codes" },
-
-    // Security
-    { key: "users", label: "👤 Users" },
-
-    // Other / Reports / Settings
-    { key: "reports", label: "📊 Reports" },
-    { key: "audit_logs", label: "📜 Audit Logs" },
+    // Settings
     { key: "custom_fields", label: "⚙️ Custom Fields" },
     { key: "recycle_bin", label: "🗑️ Recycle Bin" },
     { key: "settings", label: "⚙️ Settings" },
