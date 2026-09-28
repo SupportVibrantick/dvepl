@@ -23,12 +23,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 import { apiClient } from "@/services/axios";
 import { securityApi, crmApi } from "@/services/modules";
@@ -225,8 +223,10 @@ export function AddOrderModal({
 
   // Workflow Stages & Responsibility assignments
   const [stageRows, setStageRows] = useState<StageRow[]>(DEFAULT_STAGE_ROWS);
+  // A stage can have more than one responsible person; every assignee is kept
+  // so re-saving an order never silently drops someone.
   const [stageAssignments, setStageAssignments] = useState<
-    Record<string, string>
+    Record<string, string[]>
   >({});
 
   // Line items (Order Detail Tabs)
@@ -548,10 +548,15 @@ export function AddOrderModal({
           }
 
           if (Array.isArray(order.assignments) && order.assignments.length > 0) {
-            const mappedAssignments: Record<string, string> = {};
+            // A stage can have several assignees, so accumulate them instead of
+            // letting the last row win.
+            const mappedAssignments: Record<string, string[]> = {};
             order.assignments.forEach((a: any) => {
               if (a.stage && a.userId) {
-                mappedAssignments[a.stage] = a.userId;
+                const current = mappedAssignments[a.stage] ?? [];
+                if (!current.includes(a.userId)) {
+                  mappedAssignments[a.stage] = [...current, a.userId];
+                }
               }
             });
             if (Object.keys(mappedAssignments).length > 0) {
@@ -738,11 +743,27 @@ export function AddOrderModal({
   // ------------------------------------------------------------
   // STAGE ASSIGNMENT HANDLER & LABELS
   // ------------------------------------------------------------
-  const handleStageAssignmentChange = (stageKey: string, userId: string) => {
-    setStageAssignments((prev) => ({
-      ...prev,
-      [stageKey]: userId === "__none__" ? "" : userId,
-    }));
+  const handleStageAssignmentChange = (
+    stageKey: string,
+    userIds: string[]
+  ) => {
+    setStageAssignments((prev) => {
+      const next = { ...prev };
+      if (userIds.length === 0) {
+        delete next[stageKey];
+      } else {
+        next[stageKey] = userIds;
+      }
+      return next;
+    });
+  };
+
+  const toggleStageAssignee = (stageKey: string, userId: string, checked: boolean) => {
+    const current = stageAssignments[stageKey] ?? [];
+    const next = checked
+      ? Array.from(new Set([...current, userId]))
+      : current.filter((id) => id !== userId);
+    handleStageAssignmentChange(stageKey, next);
   };
 
   const toggleOrderTakenByUser = (userId: string, checked: boolean) => {
@@ -776,10 +797,12 @@ export function AddOrderModal({
   }, [orderTakenByUserIds, orderTakenById, teamMembers]);
 
   const getStageAssigneeLabel = (stageKey: string) => {
-    const userId = stageAssignments[stageKey];
-    if (!userId || userId === "__none__") return "";
-    const member = teamMembers.find((m) => m.id === userId);
-    return member ? member.name : "";
+    const userIds = stageAssignments[stageKey];
+    if (!userIds || userIds.length === 0) return "";
+    return userIds
+      .map((userId) => teamMembers.find((m) => m.id === userId)?.name)
+      .filter(Boolean)
+      .join(", ");
   };
 
   // ------------------------------------------------------------
@@ -934,8 +957,8 @@ export function AddOrderModal({
 
     for (const stage of stageRows) {
       if (stageRequirements[stage.key] !== true) continue;
-      const assigned = stageAssignments[stage.key];
-      if (!assigned || assigned === "__none__") {
+      const assigned = stageAssignments[stage.key] ?? [];
+      if (assigned.length === 0) {
         missingRequired.push(stage.name);
         missingMap[`stage:${stage.key}`] = true;
       }
@@ -1056,20 +1079,35 @@ export function AddOrderModal({
       // 2. Save Stage Responsibilities (Assignments) FIRST
       // Saving assignments first ensures that if the creator or assignee is checked
       // for stage authorization when uploading attachments, their permissions exist.
-      const stageAssignmentsPayload = Object.entries(stageAssignments)
-        .filter(([_, userId]) => Boolean(userId) && userId !== "__none__")
-        .map(([stage, userId]) => ({
+      // The backend replaces the order's assignments with exactly this list, so
+      // every stage the admin can see has to be included - including cleared
+      // ones, otherwise stale assignees would survive.
+      const stageAssignmentsPayload = Array.from(
+        new Set([...stageRows.map((s) => s.key), ...Object.keys(stageAssignments)])
+      )
+        .filter((stage) => isAdmin || Boolean(stageAssignments[stage]?.length))
+        .map((stage) => ({
           stage,
-          userIds: [userId],
-        }));
+          userIds: stageAssignments[stage] ?? [],
+        }))
+        .filter((entry) => entry.userIds.length > 0);
 
-      if (orderId && stageAssignmentsPayload.length > 0) {
+      const hasStageAssignmentsToSave =
+        Object.values(stageAssignments).some((ids) => ids.length > 0);
+
+      if (orderId && (hasStageAssignmentsToSave || editingOrder)) {
         try {
           await apiClient.put(`/order/assign/${orderId}`, {
             assignments: stageAssignmentsPayload,
           });
-        } catch (assignErr) {
+        } catch (assignErr: any) {
+          // Never swallow this: the order itself is already saved, so the user
+          // has to know their stage responsibilities were not stored.
           console.error("Failed to assign stages:", assignErr);
+          toast.error(
+            assignErr?.response?.data?.message ??
+              "Order saved, but stage responsibilities could not be saved. Please assign them again.",
+          );
         }
       }
 
@@ -1614,7 +1652,7 @@ export function AddOrderModal({
                 </div>
                 <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-normal leading-relaxed mt-0.5">
                   {isAdmin
-                    ? "Pick who's responsible for each stage that varies per order. Stages with a Fixed Responsible Person (set on the Workflow Template) are auto-assigned and not asked here."
+                    ? "Pick one or more people responsible for each stage. Everyone selected here gets a task for that stage and an email notification."
                     : "Stage responsibilities are managed and assigned exclusively by Administrators."}
                 </p>
               </div>
@@ -1635,7 +1673,7 @@ export function AddOrderModal({
 
             <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg divide-y divide-neutral-200 dark:divide-neutral-800 overflow-hidden bg-white dark:bg-neutral-900">
               {stageRows.map((stage) => {
-                const assignedVal = stageAssignments[stage.key] || "__none__";
+                const assignedUserIds = stageAssignments[stage.key] ?? [];
                 const stageLabel = getStageAssigneeLabel(stage.key);
                 return (
                   <div
@@ -1655,36 +1693,98 @@ export function AddOrderModal({
                       </span>
                     </div>
 
-                    <div className="w-56 shrink-0">
-                      <Select
-                        value={assignedVal}
-                        disabled={!isAdmin}
-                        onValueChange={(val) =>
-                          handleStageAssignmentChange(stage.key, val ?? "")
-                        }
-                      >
-                        <SelectTrigger
-                          className={`h-8 text-xs rounded-lg border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 font-normal ${
-                            !isAdmin ? "cursor-not-allowed opacity-75 bg-neutral-100/70 dark:bg-neutral-900" : ""
-                          } ${shakeCls(`stage:${stage.key}`)}`}
+                    <div className="w-64 shrink-0">
+                      <Popover>
+                        <PopoverTrigger
+                          render={
+                            <button
+                              type="button"
+                              disabled={!isAdmin}
+                              className={`w-full h-8 px-2 text-left text-xs rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 font-normal flex items-center justify-between gap-2 ${
+                                !isAdmin
+                                  ? "cursor-not-allowed opacity-75 bg-neutral-100/70 dark:bg-neutral-900"
+                                  : "hover:border-neutral-400 dark:hover:border-neutral-600"
+                              } ${shakeCls(`stage:${stage.key}`)}`}
+                            >
+                              <span
+                                className={
+                                  assignedUserIds.length > 0
+                                    ? "truncate text-neutral-800 dark:text-neutral-200"
+                                    : "truncate text-neutral-400"
+                                }
+                              >
+                                {assignedUserIds.length > 0
+                                  ? stageLabel
+                                  : isAdmin
+                                    ? "Who's responsible?"
+                                    : "Unassigned"}
+                              </span>
+                              {assignedUserIds.length > 0 && (
+                                <span className="shrink-0 text-[10px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900/60">
+                                  {assignedUserIds.length}
+                                </span>
+                              )}
+                            </button>
+                          }
+                        />
+                        <PopoverContent
+                          align="end"
+                          className="w-64 p-2 z-50 bg-background border border-border/80 rounded-xl shadow-2xl"
                         >
-                          <SelectValue placeholder={isAdmin ? "Who's responsible?" : "Unassigned"}>
-                            {stageLabel || undefined}
-                          </SelectValue>
-                        </SelectTrigger>
-                        {isAdmin && (
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              Who's responsible?
-                            </SelectItem>
-                            {teamMembers.map((member) => (
-                              <SelectItem key={member.id} value={member.id}>
-                                {member.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        )}
-                      </Select>
+                          <div className="max-h-56 overflow-y-auto space-y-1">
+                            {teamMembers.length === 0 ? (
+                              <p className="text-xs text-muted-foreground px-2 py-1">
+                                No team members available
+                              </p>
+                            ) : (
+                              teamMembers.map((member) => {
+                                const checked = assignedUserIds.includes(member.id);
+                                return (
+                                  <label
+                                    key={member.id}
+                                    className={`flex items-start gap-2 cursor-pointer rounded-md px-2 py-1.5 text-xs transition-colors ${
+                                      checked
+                                        ? "bg-blue-50 dark:bg-blue-950/40 ring-1 ring-blue-200 dark:ring-blue-900"
+                                        : "hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                                    }`}
+                                  >
+                                    <Checkbox
+                                      className="mt-0.5"
+                                      checked={checked}
+                                      onCheckedChange={(val) =>
+                                        toggleStageAssignee(
+                                          stage.key,
+                                          member.id,
+                                          Boolean(val)
+                                        )
+                                      }
+                                    />
+                                    <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                                      {member.name}
+                                      {member.email ? (
+                                        <span className="block text-[10px] font-normal text-neutral-500 dark:text-neutral-400">
+                                          {member.email}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  </label>
+                                );
+                              })
+                            )}
+                          </div>
+                          {assignedUserIds.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStageAssignmentChange(stage.key, [])
+                              }
+                              className="mt-2 w-full text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md py-1.5"
+                            >
+                              Clear this stage
+                            </button>
+                          )}
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                 );

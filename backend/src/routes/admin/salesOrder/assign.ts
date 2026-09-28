@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 
 import NotificationService  from "../../../services/notification/notification.service"
+import { nextEmployeeCode } from "../../../utils/employeeCode"
 
 const stageAssignmentSchema = z.object({
   stage: z.string().nullable().optional(),
@@ -16,10 +17,10 @@ const stageAssignmentSchema = z.object({
     .min(1, "At least one user must be assigned."),
 });
 
+// An empty `assignments` array is valid and clears every stage assignment for
+// the order; a body carrying neither key is still rejected below.
 const assignSalesOrderSchema = z.object({
-  assignments: z
-    .array(stageAssignmentSchema)
-    .min(1, "At least one stage assignment is required."),
+  assignments: z.array(stageAssignmentSchema),
 });
 
 // Backward compatible: { userIds: [...] } treated as a whole-order (all stages) assignment.
@@ -93,6 +94,29 @@ export default async function assignSalesOrderRoute(
           });
         }
 
+        // Collapse repeated stage entries into one row per stage, unioning the
+        // users. Two entries for the same stage would otherwise create two
+        // assignment rows and two tasks for the same stage.
+        const assignmentsByStage = new Map<
+          string,
+          { stage?: string | null; remarks?: string | null; userIds: string[] }
+        >();
+        for (const entry of assignments) {
+          const key = entry.stage ?? "";
+          const existing = assignmentsByStage.get(key);
+          if (existing) {
+            existing.userIds = Array.from(
+              new Set([...existing.userIds, ...entry.userIds]),
+            );
+            if (!existing.remarks && entry.remarks) {
+              existing.remarks = entry.remarks;
+            }
+          } else {
+            assignmentsByStage.set(key, { ...entry });
+          }
+        }
+        assignments = Array.from(assignmentsByStage.values());
+
         // ==========================================
         // Check Sales Order
         // ==========================================
@@ -161,6 +185,28 @@ export default async function assignSalesOrderRoute(
           ...(activeTemplate?.steps ?? []).map((step: any) => step.key),
         ]);
 
+        // A null/empty stage is the whole-order assignment and stays valid.
+        // Anything else must be a stage the active template (or the historical
+        // standard set) actually defines, otherwise the assignment would be
+        // invisible in the UI and would spawn a task for a stage nobody sees.
+        const invalidStageKeys = Array.from(
+          new Set(
+            assignments
+              .map((a) => a.stage)
+              .filter((stage): stage is string => Boolean(stage))
+              .filter((stage) => !validStageKeys.has(stage)),
+          ),
+        );
+
+        if (invalidStageKeys.length > 0) {
+          return reply.status(400).send({
+            success: false,
+            message:
+              "One or more stages are not part of the active workflow template.",
+            invalidStageKeys,
+          });
+        }
+
         // ==========================
         // Validate Users (deduped across all stages)
         // ==========================
@@ -169,7 +215,11 @@ export default async function assignSalesOrderRoute(
           new Set(assignments.flatMap((a) => a.userIds)),
         );
 
-        if (uniqueUserIds.length === 0) {
+        // An empty assignments array clears every stage assignment and is a
+        // legitimate request; a request that names stages but no users is not.
+        const isClearingAll = assignments.length === 0;
+
+        if (uniqueUserIds.length === 0 && !isClearingAll) {
           return reply.status(400).send({
             success: false,
             message: "At least one user must be assigned.",
@@ -236,10 +286,11 @@ export default async function assignSalesOrderRoute(
 
             // 3. Ensure employee records exist for all assigned users
             const userEmployeeMap = new Map<string, string>();
+            const reservedCodes = new Set<string>();
             for (const user of users) {
               let employee = await tx.employee.findFirst({
                 where: {
-                  OR: [{ userId: user.id }, { id: user.id }],
+                  userId: user.id,
                   deletedAt: null,
                 },
                 select: { id: true },
@@ -249,13 +300,9 @@ export default async function assignSalesOrderRoute(
                 const nameParts = (user.name || "Team Member").trim().split(" ");
                 const firstName = nameParts[0] || "Team";
                 const lastName = nameParts.slice(1).join(" ") || "";
-                const code = `EMP-${user.id.slice(0, 6).toUpperCase()}`;
-                const existingWithCode = await tx.employee.findFirst({
-                  where: { employeeCode: code },
-                });
-                const finalCode = existingWithCode
-                  ? `EMP-${Date.now().toString().slice(-6)}`
-                  : code;
+                // Employee.employeeCode is globally unique, so it cannot be
+                // derived from the user id or a timestamp.
+                const finalCode = await nextEmployeeCode(tx, reservedCodes);
 
                 employee = await tx.employee.create({
                   data: {
@@ -306,20 +353,41 @@ export default async function assignSalesOrderRoute(
                 .filter(Boolean)
                 .join("\n\n");
 
-              const task = await tx.task.create({
-                data: {
+              // Tasks are linked to an order by their title (the Task model has
+              // no salesOrderId), so an open task for the same order + stage is
+              // reused instead of piling up a fresh copy on every re-save. A
+              // task someone already completed is left alone as history.
+              const existingTask = await tx.task.findFirst({
+                where: {
                   title: taskTitle,
-                  description: taskDescription,
-                  priority: "high",
-                  dueDate: taskDueDate,
                   status: "pending",
-                  notifEnabled: true,
-                  notifType: "automatic",
-                  notifDays: 1,
-                  notifUnit: "days",
-                  notifFrequency: "once",
+                  deletedAt: null,
                 },
+                orderBy: { createdAt: "desc" },
               });
+
+              const task = existingTask
+                ? await tx.task.update({
+                    where: { id: existingTask.id },
+                    data: {
+                      description: taskDescription,
+                      dueDate: taskDueDate,
+                    },
+                  })
+                : await tx.task.create({
+                    data: {
+                      title: taskTitle,
+                      description: taskDescription,
+                      priority: "high",
+                      dueDate: taskDueDate,
+                      status: "pending",
+                      notifEnabled: true,
+                      notifType: "automatic",
+                      notifDays: 1,
+                      notifUnit: "days",
+                      notifFrequency: "once",
+                    },
+                  });
 
               // Assign task to corresponding employees
               const employeeIds = a.userIds
@@ -327,6 +395,9 @@ export default async function assignSalesOrderRoute(
                 .filter((eId): eId is string => Boolean(eId));
 
               if (employeeIds.length > 0) {
+                await tx.taskAssignment.deleteMany({
+                  where: { taskId: task.id },
+                });
                 await tx.taskAssignment.createMany({
                   data: employeeIds.map((employeeId) => ({
                     taskId: task.id,
@@ -340,6 +411,7 @@ export default async function assignSalesOrderRoute(
                 stage: a.stage,
                 stageName,
                 assignedUserIds: a.userIds,
+                reusedTask: Boolean(existingTask),
               });
             }
 
@@ -519,14 +591,16 @@ export default async function assignSalesOrderRoute(
 
         return reply.status(200).send({
           success: true,
-          message:
-            failedEmails.length === 0
+          message: isClearingAll
+            ? "All stage assignments cleared for this order."
+            : failedEmails.length === 0
               ? "Sales Order assigned successfully and notification emails sent."
               : "Sales Order assigned successfully, but one or more notification emails failed.",
           data: {
             salesOrderId: salesOrder.id,
             dveplCode: salesOrder.dveplCode,
             assignments: newAssignments,
+            tasks: createdTasks,
             notifications: {
               total: uniqueUserIds.length,
               sent: uniqueUserIds.length - failedEmails.length,
