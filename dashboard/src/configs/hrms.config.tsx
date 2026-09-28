@@ -58,8 +58,19 @@ export const employeesConfig = {
   syncAction: {
     label: "Sync Users",
     run: async () => {
-      const res = await hrmsApi.employees.sync();
-      return res as any;
+      // Pull the staff list from the second portal first: the local sync below
+      // only turns users that already exist here into employee records, so on
+      // its own it reports 0 whenever the portal has never been fetched.
+      const portal: any = await hrmsApi.employees.syncPortal();
+      const fromPortal = (portal?.created ?? 0) + (portal?.updated ?? 0);
+      const local: any = await hrmsApi.employees.sync();
+
+      return {
+        syncedCount: fromPortal + (local?.syncedCount ?? 0),
+        message: `Fetched ${fromPortal} staff from the portal, added ${
+          local?.syncedCount ?? 0
+        } to employees.`,
+      };
     },
   },
   columns: [
