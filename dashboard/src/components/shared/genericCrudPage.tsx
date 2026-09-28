@@ -16,11 +16,12 @@ import {
   UserPlus,
   UserMinus,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 import { GenericTable } from "@/components/tables/genericTable";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { canPerformPageAction } from "@/utils/pagePermissions";
+import { canPerformPageAction, isAdminUser } from "@/utils/pagePermissions";
 
 // Maps the generic table's storage key (tableName) to the PRBAC module key so
 // Create/Edit/Delete buttons can be hidden when the action permission is off.
@@ -178,6 +179,20 @@ interface GenericCrudPageProps<
   syncAllAction?: {
     label: string;
     run: () => Promise<{ syncedCount?: number; message?: string }>;
+  };
+  /**
+   * Optional field-requirement management configuration.
+   * When provided, an admin-only "Manage Field Requirements" button appears
+   * in the header. Clicking it opens the supplied modal component.
+   */
+  manageFieldsConfig?: {
+    getFieldConfig: (settings: any) => Record<string, boolean>;
+    ModalComponent: React.ComponentType<{
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      fields: Record<string, boolean>;
+      onSaved?: (fields: Record<string, boolean>) => void;
+    }>;
   };
 }
 
@@ -567,6 +582,7 @@ export function GenericCrudPage<TRecord extends { id: string }>({
   relationManager,
   syncAction,
   syncAllAction,
+  manageFieldsConfig,
 }: GenericCrudPageProps<TRecord>) {
   const [searchParams] = useSearchParams();
   const globalStore = useERPStore();
@@ -603,6 +619,25 @@ export function GenericCrudPage<TRecord extends { id: string }>({
   const [recordToDelete, setRecordToDelete] = useState<TRecord | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [isManageFieldsOpen, setIsManageFieldsOpen] = useState(false);
+
+  // Resolve current field requirement config from store settings (if manageFieldsConfig provided)
+  const dynamicFieldConfig = React.useMemo(() => {
+    if (!manageFieldsConfig) return null;
+    return manageFieldsConfig.getFieldConfig(globalStore.settings);
+  }, [manageFieldsConfig, globalStore.settings]);
+
+  // Fields with required flags overridden by admin configuration (if any)
+  const resolvedFields = React.useMemo(() => {
+    if (!dynamicFieldConfig) return fields;
+    return fields.map((field) => {
+      const override = dynamicFieldConfig[field.name];
+      if (typeof override === "boolean") {
+        return { ...field, required: override };
+      }
+      return field;
+    });
+  }, [fields, dynamicFieldConfig]);
   const [syncLimit, setSyncLimit] = useState<string>(
     syncAction?.limitField?.defaultValue
       ? String(syncAction.limitField.defaultValue)
@@ -638,6 +673,7 @@ export function GenericCrudPage<TRecord extends { id: string }>({
     !moduleKey || canPerformPageAction(currentUser?.actionPermissions, moduleKey, "edit");
   const canDelete =
     !moduleKey || canPerformPageAction(currentUser?.actionPermissions, moduleKey, "delete");
+  const isAdmin = isAdminUser(currentUser);
 
   const loadRecords = useCallback(async () => {
     if (!api) return;
@@ -988,6 +1024,26 @@ export function GenericCrudPage<TRecord extends { id: string }>({
 
   const submitForm = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    // Validate dynamically required fields (driven by admin field-config)
+    const dynamicErrors: Record<string, string> = {};
+    for (const field of resolvedFields) {
+      if (field.required) {
+        const val = formValues[field.name];
+        const isEmpty =
+          val === undefined ||
+          val === null ||
+          (typeof val === "string" && val.trim() === "");
+        if (isEmpty) {
+          dynamicErrors[field.name] = `${field.label} is required.`;
+        }
+      }
+    }
+    if (Object.keys(dynamicErrors).length > 0) {
+      setErrors(dynamicErrors);
+      return;
+    }
+
     const result = zodSchema.safeParse(formValues);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -1662,24 +1718,38 @@ export function GenericCrudPage<TRecord extends { id: string }>({
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-0">
           <DialogHeader className="bg-gradient-to-br from-primary/5 via-background to-transparent border-b p-6">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {editingRecord ? "Update Entry" : "New Entry"}
-            </p>
-
-            <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
-              {editingRecord ? `Edit ${moduleName}` : `Add ${moduleName}`}
-            </DialogTitle>
-
-            <DialogDescription className="text-xs text-muted-foreground">
-              Complete the details below to update the system logs.
-            </DialogDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {editingRecord ? "Update Entry" : "New Entry"}
+                </p>
+                <DialogTitle className="text-xl font-bold tracking-tight text-foreground mt-0.5">
+                  {editingRecord ? `Edit ${moduleName}` : `Add ${moduleName}`}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-1">
+                  Complete the details below to update the system logs.
+                </DialogDescription>
+              </div>
+              {manageFieldsConfig && isAdmin && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => { e.preventDefault(); setIsManageFieldsOpen(true); }}
+                  className="shrink-0 gap-1.5 h-8 text-xs border-primary/20 text-primary bg-primary/5 hover:bg-primary/10"
+                >
+                  <Settings className="size-3.5" />
+                  Manage Field Requirements
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           <form
             onSubmit={submitForm}
             className="flex-1 flex flex-col justify-between overflow-y-auto"
           >
             <div className="p-6 space-y-6">
-              {fields.map((field) => (
+              {resolvedFields.map((field) => (
                 <div key={field.name} className="flex flex-col gap-2">
                   <Label
                     htmlFor={field.name}
@@ -2088,6 +2158,21 @@ export function GenericCrudPage<TRecord extends { id: string }>({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Manage Field Requirements Modal (admin-only) */}
+      {manageFieldsConfig && (() => {
+        const ManageModal = manageFieldsConfig.ModalComponent;
+        return (
+          <ManageModal
+            open={isManageFieldsOpen}
+            onOpenChange={setIsManageFieldsOpen}
+            fields={dynamicFieldConfig ?? ({} as Record<string, boolean>)}
+            onSaved={() => {
+              void globalStore.fetchSettings();
+            }}
+          />
+        );
+      })()}
 
       <ConfirmDialog
         open={deleteConfirmOpen}

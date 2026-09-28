@@ -7,6 +7,11 @@ import { EmployeeStatus } from "@/types/erp";
 import { Employee, Attendance, Leave, Salary } from "@/types/erp";
 import { ExternalLink } from "lucide-react";
 import { useERPStore } from "@/store/erpStore";
+import {
+  getEmployeeFormFieldConfig,
+} from "@/pages/employee/employeeFormFieldsConfig";
+import { ManageEmployeeFieldsModal } from "@/pages/employee/ManageEmployeeFieldsModal";
+
 
 // ==========================================
 // 7. EMPLOYEES ROUTE CONFIG
@@ -72,6 +77,10 @@ export const employeesConfig = {
         } to employees.`,
       };
     },
+  },
+  manageFieldsConfig: {
+    getFieldConfig: getEmployeeFormFieldConfig,
+    ModalComponent: ManageEmployeeFieldsModal,
   },
   columns: [
     { accessorKey: "employeeCode", header: sortableHeader("Emp Code") },
