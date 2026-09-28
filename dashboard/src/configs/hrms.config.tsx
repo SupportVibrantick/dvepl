@@ -144,7 +144,7 @@ export const employeesConfig = {
       label: "Last Name",
       type: "text",
       placeholder: "Doe",
-      required: true,
+      required: false,
     },
     {
       name: "gender",

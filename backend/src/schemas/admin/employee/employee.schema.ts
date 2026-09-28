@@ -24,10 +24,15 @@ export const createEmployeeSchema = z.object({
         .trim()
         .min(2, "First name is required"),
 
+    // Optional: single-word names are common, so an empty last name is valid.
+    // No `.default()` here on purpose - the update schema is `.partial()`, and
+    // in zod 4 a default would turn an omitted key into "" and wipe the stored
+    // last name on every partial update.
     lastName: z
         .string()
         .trim()
-        .min(2, "Last name is required"),
+        .max(100, "Last name is too long")
+        .optional(),
 
     gender: z.string().optional().nullable(),
 

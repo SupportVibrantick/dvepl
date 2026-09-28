@@ -163,6 +163,11 @@ async function createEmployeeRoutes(
         }
 
         const { email, ...employeeData } = data as any;
+        // `Employee.lastName` is a non-nullable column, so an omitted last name
+        // is stored as an empty string rather than rejected.
+        if (employeeData.lastName === undefined) {
+          employeeData.lastName = "";
+        }
 
         const employee = await fastify.prisma.$transaction(async (tx) => {
           const emp = await tx.employee.create({
