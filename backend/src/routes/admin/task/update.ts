@@ -133,7 +133,7 @@ async function adminTaskUpdateRoutes(
           const finalDueDate = dueDate !== undefined ? new Date(dueDate) : existingTask.dueDate;
           const finalStatus = status !== undefined ? status : existingTask.status;
 
-          // Fetch currently assigned users
+          // Fetch all assigned users after update (includes newly assigned)
           const assignments = await fastify.prisma.taskAssignment.findMany({
             where: { taskId: id },
             include: { employee: { include: { user: true } } }
@@ -143,13 +143,25 @@ async function adminTaskUpdateRoutes(
             .map((a: any) => a.employee?.user)
             .filter((u: any) => u && u.email);
 
+          const isNewAssignment = (assignedUserIds && assignedUserIds.length > 0);
+          const companyId = (request.user as any)?.companyId || (request.admin as any)?.companyId;
+
           for (const user of assignedUsers) {
+            const subject = isNewAssignment
+              ? `New Task Assigned: ${finalTitle}`
+              : `Task Updated: ${finalTitle}`;
+            const message = isNewAssignment
+              ? `Hello ${user.name || "User"},\n\nYou have been assigned to a new task: "${finalTitle}".\nPriority: ${finalPriority}.\nDue Date: ${new Date(finalDueDate).toLocaleDateString()}.\n\nYou can view and manage this task in the DVEPL ERP portal.`
+              : `Hello ${user.name || "User"},\n\nThe task "${finalTitle}" assigned to you has been updated.\nPriority: ${finalPriority}.\nDue Date: ${new Date(finalDueDate).toLocaleDateString()}.\nStatus: ${finalStatus}.`;
+
             await NotificationService.sendCustomNotification({
               to: user.email,
-              subject: `Task Updated: ${finalTitle}`,
-              message: `Hello ${user.name || "User"},\n\nThe task "${finalTitle}" assigned to you has been updated.\nPriority: ${finalPriority}.\nDue Date: ${new Date(finalDueDate).toLocaleDateString()}.\nStatus: ${finalStatus}.`,
-              eventCode: "TASK_UPDATED"
-            });
+              subject,
+              message,
+              eventCode: isNewAssignment ? "TASK_ASSIGNED" : "TASK_UPDATED",
+              relatedModule: "TASK",
+              relatedRecordId: id,
+            }, companyId);
           }
         } catch (notifErr) {
           console.error("Failed to send task update notifications:", notifErr);

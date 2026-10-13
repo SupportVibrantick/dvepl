@@ -64,8 +64,9 @@ export class EmailService {
     let errorMsg: string | null = null;
 
     try {
+      const fromEmail = this.resolveFromEmail(config);
       info = await transporter.sendMail({
-        from: `"${config.smtpFromName || "DVEPL"}" <${config.smtpFromEmail}>`,
+        from: `"${config.smtpFromName || "DVEPL"}" <${fromEmail}>`,
         to: options.to,
         subject: options.subject,
         html: options.html,
@@ -103,6 +104,24 @@ export class EmailService {
     await transporter.verify();
 
     return true;
+  }
+
+  private static resolveFromEmail(config: {
+    smtpFromEmail?: string | null;
+    smtpUsername?: string | null;
+    smtpHost?: string | null;
+  }): string {
+    const fromDomain = config.smtpFromEmail?.split("@")[1]?.toLowerCase();
+    const userDomain = config.smtpUsername?.split("@")[1]?.toLowerCase();
+    const hostDomain = config.smtpHost?.toLowerCase()
+      .replace(/^smtp\./, "")
+      .replace(/^mail\./, "");
+
+    if (fromDomain && userDomain && fromDomain !== userDomain && userDomain === hostDomain) {
+      return config.smtpUsername!;
+    }
+
+    return config.smtpFromEmail || config.smtpUsername || "noreply@dvepl.com";
   }
 }
 

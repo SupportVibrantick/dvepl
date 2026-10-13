@@ -480,7 +480,7 @@ export default function TasksPage() {
             <span className="hidden sm:inline">Refresh</span>
           </Button>
 
-          {stats.overdue > 0 && (
+          {/* {stats.overdue > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -495,7 +495,7 @@ export default function TasksPage() {
               )}
               <span>Alert Overdue ({stats.overdue})</span>
             </Button>
-          )}
+          )} */}
 
           {canCreate && (
             <Button
