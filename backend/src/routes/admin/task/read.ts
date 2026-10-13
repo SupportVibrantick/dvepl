@@ -78,26 +78,28 @@ async function adminTaskReadRoutes(
           },
         });
 
-        // Attach EAV Custom Field Values
+        const entityIds = tasks.map(t => t.id);
+
         const { CustomFieldService } = await import("../../../services/customFieldService");
         const cfService = new CustomFieldService(fastify.prisma);
-        const entityIds = tasks.map(t => t.id);
-        const cfValuesMap = await cfService.getValuesForEntities("task", entityIds);
 
-        // Fetch Notification Logs for these tasks
-        const notifLogs = entityIds.length > 0
-          ? await fastify.prisma.notificationLog.findMany({
-              where: {
-                OR: [
-                  { relatedRecordId: { in: entityIds } },
-                  { relatedModule: "TASK", relatedRecordId: { in: entityIds } },
-                ],
-              },
-              orderBy: {
-                createdAt: "desc",
-              },
-            })
-          : [];
+        const [cfValuesMap, notifLogs] = await Promise.all([
+          cfService.getValuesForEntities("task", entityIds),
+          entityIds.length > 0
+            ? fastify.prisma.notificationLog.findMany({
+                where: {
+                  OR: [
+                    { relatedRecordId: { in: entityIds } },
+                    { relatedModule: "TASK", relatedRecordId: { in: entityIds } },
+                  ],
+                },
+                orderBy: {
+                  createdAt: "desc",
+                },
+                take: 1000,
+              })
+            : [],
+        ]);
 
         const logsByTaskId: Record<string, any[]> = {};
         for (const log of notifLogs) {
