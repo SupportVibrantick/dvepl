@@ -35,7 +35,6 @@ const CostCenterPage = lazy(
 );
 
 // Employee
-const EmployeePage = lazy(() => import("@/pages/employee/employeePage"));
 const AttendancePage = lazy(() => import("@/pages/attendance/attendancePage"));
 const LeavePage = lazy(() => import("@/pages/leave/leavePage"));
 const HolidaysPage = lazy(() => import("@/pages/holidays/holidaysPage"));
@@ -156,7 +155,6 @@ export function AppRouter() {
                 element={<CostCenterPage />}
               />
               {/* HRMS */}
-              <Route path="/hrms/employees" element={<EmployeePage />} />
               <Route path="/hrms/attendance" element={<AttendancePage />} />
               <Route path="/hrms/leaves" element={<LeavePage />} />
               <Route path="/hrms/holidays" element={<HolidaysPage />} />

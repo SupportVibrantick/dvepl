@@ -11,7 +11,6 @@ export const ROUTES = {
   ORGANIZATION_COST_CENTERS: '/organization/cost-centers',
 
   // HRMS
-  HRMS_EMPLOYEES: '/hrms/employees',
   HRMS_ATTENDANCE: '/hrms/attendance',
   HRMS_LEAVES: '/hrms/leaves',
   HRMS_HOLIDAYS: '/hrms/holidays',

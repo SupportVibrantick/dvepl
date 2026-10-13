@@ -4,15 +4,11 @@ import {
   GitBranch,
   Network,
   Users2,
-  Award,
   Wallet,
-  UserCheck,
   CalendarDays,
-  Briefcase,
   Clock,
   DollarSign,
   Handshake,
-  MessageSquare,
   // FolderGit2,
   ShieldCheck,
   FileText,
@@ -20,7 +16,6 @@ import {
   Settings2,
   // FolderOpen,
   // FileCheck,
-  Zap,
   // HelpCircle,
   FileSpreadsheet,
   ShoppingCart,
@@ -28,7 +23,6 @@ import {
   Truck,
   Package,
   Trash2,
-  PenTool,
   Workflow,
 } from "lucide-react";
 import { ROUTES } from "./routes";
@@ -82,12 +76,6 @@ export const sidebarItems: SidebarItem[] = [
   },
 
   // HRMS
-  {
-    name: "Employees",
-    icon: UserCheck,
-    path: ROUTES.HRMS_EMPLOYEES,
-    section: "HRMS",
-  },
   {
     name: "Attendance",
     icon: Clock,

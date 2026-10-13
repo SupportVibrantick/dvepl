@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useERPStore } from "@/store/erpStore";
-import { securityApi } from "@/services/modules";
+import { securityApi, hrmsApi } from "@/services/modules";
 import { organizationApi } from "@/services/organization";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
-import { Eye, EyeOff, AlertTriangle, FileText, Plus, Trash2, Check, RotateCcw, ArrowUpDown, Info } from "lucide-react";
+import { Eye, EyeOff, AlertTriangle, FileText, Plus, Trash2, Check, RotateCcw, ArrowUpDown, Info, RefreshCw } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/confirmDialog";
 import {
   DocumentCategoryDef,
@@ -156,6 +156,7 @@ export function SettingsPage() {
   // Users List and Search state
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [isSyncingUsers, setIsSyncingUsers] = useState(false);
   const [userSearch, setUserSearch] = useState("");
 
   // Modals state
@@ -639,6 +640,23 @@ export function SettingsPage() {
   // Handle User Deletion (Open Custom Confirm Modal)
   const handleDeleteUser = (userId: string) => {
     setDeleteConfirmId(userId);
+  };
+
+  const handleSyncUsers = async () => {
+    setIsSyncingUsers(true);
+    const syncToast = toast.loading("Syncing users...");
+    try {
+      const portal: any = await hrmsApi.employees.syncPortal();
+      const fromPortal = (portal?.created ?? 0) + (portal?.updated ?? 0);
+      const local: any = await hrmsApi.employees.sync();
+      const total = fromPortal + (local?.syncedCount ?? 0);
+      toast.success(`Fetched ${fromPortal} staff from portal, synced ${total} users.`, { id: syncToast });
+      loadUsersList();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Sync failed.", { id: syncToast });
+    } finally {
+      setIsSyncingUsers(false);
+    }
   };
 
   // Perform actual deletion
@@ -1787,15 +1805,25 @@ export function SettingsPage() {
               />
               <div className="text-xs text-muted-foreground font-semibold flex items-center gap-3">
                 <span>Total: {users.length} users</span>
-                <button
-                  onClick={() => {
-                    setActiveSection("create-user");
-                    setBulkTab("single");
-                  }}
-                  className="px-3.5 py-1.5 text-xs bg-primary text-white font-bold rounded-lg hover:bg-primary/95 transition shadow-sm"
-                >
-                  ➕ Add User
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void handleSyncUsers()}
+                    disabled={isSyncingUsers}
+                    className="px-3.5 py-1.5 text-xs bg-muted text-muted-foreground border border-border font-bold rounded-lg hover:bg-border transition flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`size-3.5 ${isSyncingUsers ? "animate-spin" : ""}`} />
+                    {isSyncingUsers ? "Syncing..." : "Sync Users"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveSection("create-user");
+                      setBulkTab("single");
+                    }}
+                    className="px-3.5 py-1.5 text-xs bg-primary text-white font-bold rounded-lg hover:bg-primary/95 transition shadow-sm"
+                  >
+                    ➕ Add User
+                  </button>
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
